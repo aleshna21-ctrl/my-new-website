@@ -3,7 +3,8 @@
 # AIOS Command Center — Hostinger VPS SSH Deployment Script
 # Target: root@2.25.249.27 | Port: 5050 (http://2.25.249.27:5050/)
 # ==============================================================================
-set -euo pipefail
+    run: | 
+      set -euo pipefail
 
 VPS_USER="${VPS_USER:-root}"
 VPS_IP="${VPS_IP:-2.25.249.27}"
