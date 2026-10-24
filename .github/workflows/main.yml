@@ -3,7 +3,7 @@ jobs:
   builds:    
     runs-on ubuntu-latest
     steps:
-      - run: | 
+    - run: | 
         set -euo pipefail
         VPS_USER="${VPS_USER:-root}"
         VPS_IP="${VPS_IP:-2.25.249.27}"
