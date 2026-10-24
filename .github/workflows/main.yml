@@ -4,15 +4,17 @@
 # Target: root@2.25.249.27 | Port: 5050 (http://2.25.249.27:5050/)
 # ==============================================================================
 jobs:
-    run: | 
+  builds:    
+    runs-on ubuntu-latest
+    steps:
+        - run: | 
       set -euo pipefail
-
-VPS_USER="${VPS_USER:-root}"
-VPS_IP="${VPS_IP:-2.25.249.27}"
-VPS_HOST="${VPS_USER}@${VPS_IP}"
-REMOTE_DIR="${REMOTE_DIR:-/opt/aios}"
-PORT="${PORT:-5050}"
-BIND_IP="${BIND_IP:-0.0.0.0}"
+      VPS_USER="${VPS_USER:-root}"
+      VPS_IP="${VPS_IP:-2.25.249.27}"
+      VPS_HOST="${VPS_USER}@${VPS_IP}"
+      REMOTE_DIR="${REMOTE_DIR:-/opt/aios}"
+      PORT="${PORT:-5050}"
+      BIND_IP="${BIND_IP:-0.0.0.0}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
