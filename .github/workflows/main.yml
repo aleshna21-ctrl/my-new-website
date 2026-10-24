@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+jobs:
+  builds:    
+    runs-on ubuntu-latest
+    steps:
+    - run: | 
+        set -euo pipefail
+        VPS_USER="${VPS_USER:-root}"
+        VPS_IP="${VPS_IP:-2.25.249.27}"
+        VPS_HOST="${VPS_USER}@${VPS_IP}"
+        REMOTE_DIR="${REMOTE_DIR:-/opt/aios}"
+        PORT="${PORT:-5050}"
+        BIND_IP="${BIND_IP:-0.0.0.0}"
+
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        cd "$SCRIPT_DIR"
+
+# 1. Package project files locally
+        UNDLE="/tmp/aios-deploy-$$.tar.gz"
+        trap 'rm -f "$BUNDLE"' EXIT
+
+        echo "[1/3] Packaging AIOS project files..."
+        tar -czf "$BUNDLE" \
+        --exclude=".git" \
+        --exclude="__pycache__" \
+        --exclude="*.pyc" \
+        --exclude=".pytest_cache" \
+        --exclude="tests" \
+        --exclude="docs" \
+        --exclude="state/server" \
+        --exclude="*.tmp*" \
+        Dockerfile compose.yml .dockerignore .env.example requirements.txt \
+        vps-backup-and-auth.sh hud_server.py app.py hud static config inbox plugins
+
+# 2. Stream archive and execute remote Docker Compose launch in a SINGLE SSH session
+        echo "[2/3] Connecting to ${VPS_HOST} via SSH to sync and launch on port ${PORT}..."
+        ssh -o StrictHostKeyChecking=accept-new "$VPS_HOST" \
+        "REMOTE_DIR='$REMOTE_DIR' PORT='$PORT' BIND_IP='$BIND_IP' VPS_IP='$VPS_IP' bash -s" <<'REMOTE_EOF' < "$BUNDLE"
+        set -euo pipefail
+
+        echo "---> [VPS] Preparing ${REMOTE_DIR} directory structure..."
+        mkdir -p "${REMOTE_DIR}/data" "${REMOTE_DIR}/scratch" "${REMOTE_DIR}/vault" "${REMOTE_DIR}/calendar" "${REMOTE_DIR}/backups"
+
+        echo "---> [VPS] Extracting project files into ${REMOTE_DIR}..."
+        tar -xzf - -C "${REMOTE_DIR}"
+        cd "${REMOTE_DIR}"
+        sed -i 's/\r$//' vps-backup-and-auth.sh 2>/dev/null || true
+        chmod +x vps-backup-and-auth.sh
+
+        echo "---> [VPS] Configuring .env for port ${PORT} (${BIND_IP})..."
+        if [ ! -f .env ]; then
+        cp .env.example .env
+        fi
+        sed -i "s/^HUD_BIND_IP=.*/HUD_BIND_IP=${BIND_IP}/" .env
+        sed -i "s/^HUD_PORT=.*/HUD_PORT=${PORT}/" .env
+
+        if ! command -v docker >/dev/null 2>&1; then
+        echo "---> [VPS] Installing Docker Engine & Docker Compose plugin..."
+        apt-get update -y
+        curl -fsSL https://get.docker.com | sh
+        apt-get install -y docker-compose-plugin
+        fi
+
+        if command -v ufw >/dev/null 2>&1; then
+        ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 root@2.25.249.27 './deploy_hostinger.sh'
+        echo "---> [VPS] Allowing TCP port ${PORT} in UFW firewall..."
+        ufw allow "${PORT}/tcp" >/dev/null || true
+        fi
+        fi
+
+        echo "---> [VPS] Building and starting Docker Compose stack on port ${PORT}..."
+        docker compose up -d --build
+
+        echo "---> [VPS] Waiting for AIOS Command Center health check..."
+        sleep 3
+        docker compose ps
+
+        echo "---> [VPS] Verifying live telemetry response on port ${PORT}..."
+        python3 -c "import urllib.request, json; r=urllib.request.urlopen('http://127.0.0.1:${PORT}/api/os/telemetry', timeout=5); d=json.loads(r.read()); print('LIVE TELEMETRY VERIFIED -> HTTP', r.status, '| ts:', d.get('ts'), '| hash:', d.get('hash'))"
+        REMOTE_EOF
+
+        echo ""
+        echo "[3/3] Deployment complete!"
+        echo "      Open your AIOS Command Center at:http://${VPS_IP}:${PORT}/"
