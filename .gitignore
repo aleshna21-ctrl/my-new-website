@@ -1,0 +1,7 @@
+__pycache__/
+state/
+inbox/
+*.log
+*.pid
+*.lock
+.venv/

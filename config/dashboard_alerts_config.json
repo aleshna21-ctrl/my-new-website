@@ -1,0 +1,1 @@
+﻿{"version": "1.0.0", "polling_interval_ms": 1000, "sources": {"primary_diode": "notification-outbox/metadata_outbox.json", "fallback_db_uri": "file:delivery-offline/job_ledger.db?mode=ro&immutable=1"}}

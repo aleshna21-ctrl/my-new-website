@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "revision": 4,
+  "settings": {
+    "workday_start": "09:00",
+    "workday_end": "18:00",
+    "buffer_min": 5
+  },
+  "tasks": [
+    {
+      "id": "task_496b408ea9",
+      "title": "Review staged outreach drafts in the Outbox",
+      "status": "todo",
+      "priority": 1,
+      "vital": true,
+      "estimate_min": 30,
+      "due": "2026-10-22",
+      "goal_id": "goal_d70eada9e7",
+      "seed": true,
+      "created_at": "2026-10-23T01:09:22+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_db1bf7d186",
+      "title": "Start the local Hermes model on 127.0.0.1:8080",
+      "status": "todo",
+      "priority": 2,
+      "vital": true,
+      "estimate_min": 20,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-23T01:09:22+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_4b74f846b7",
+      "title": "Run the unit test suite after today's changes",
+      "status": "doing",
+      "priority": 2,
+      "vital": false,
+      "estimate_min": 15,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-23T01:09:22+00:00",
+      "done_at": ""
+    }
+  ],
+  "goals": [
+    {
+      "id": "goal_d70eada9e7",
+      "title": "Offline reconciliation product: Milestone 1 sign-off",
+      "horizon": "month",
+      "seed": true,
+      "milestones": [
+        {
+          "id": "ms_0aae8b63ea",
+          "title": "Quarantine packet reviewed",
+          "done": false
+        },
+        {
+          "id": "ms_c7c54399c4",
+          "title": "Zero-loss invariant passing on live batch",
+          "done": false
+        },
+        {
+          "id": "ms_35248d7269",
+          "title": "Human-approved outreach for first prospect",
+          "done": false
+        }
+      ]
+    }
+  ],
+  "events": [],
+  "updated_at": "2026-10-23T03:32:33+00:00"
+}

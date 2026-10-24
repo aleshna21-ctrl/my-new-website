@@ -1,0 +1,65 @@
+# ==============================================================================
+# AIOS Command Center - Docker Compose Configuration
+# Optimized for Hostinger VPS & Production Deployments
+# ==============================================================================
+services:
+  aios-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aios-command-center:latest
+    container_name: aios-command-center
+    restart: unless-stopped
+
+    # Port configuration:
+    # Set HUD_BIND_IP=127.0.0.1 in .env if using a reverse proxy (Nginx/Caddy) on the host.
+    # Set HUD_BIND_IP=0.0.0.0 to expose directly on your Hostinger VPS IP.
+    ports:
+      - "${HUD_BIND_IP:-0.0.0.0}:${HUD_PORT:-5050}:5050"
+
+    environment:
+      - HUD_HOST=0.0.0.0
+      - HUD_PORT=5050
+      - HUD_DATA_DIR=/app/data
+      - HUD_SCRATCH_DIR=/app/scratch
+      - HUD_CALENDAR_DIR=/app/calendar
+      - SECOND_BRAIN_DIR=/app/vault
+      - TZ=${TZ:-UTC}
+
+    volumes:
+      # Persistent storage for task board, goals, and daily schedule
+      - aios-data:/app/data
+      # Persistent storage for scratchpad code and custom local vault notes
+      - aios-scratch:/app/scratch
+      # Read-only mount for your Second Brain Obsidian markdown vault
+      - ./vault:/app/vault:ro
+      # Read-only mount for external .ics calendar sync
+      - ./calendar:/app/calendar:ro
+
+    # Production hardening & resource governance
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.2"
+          memory: 128M
+
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5050/api/os/telemetry', timeout=3)\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  aios-data:
+    name: aios-data
+  aios-scratch:
+    name: aios-scratch

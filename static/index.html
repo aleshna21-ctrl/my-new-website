@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JEV × Second Brain — Synchronized Cockpit</title>
+<!-- Default view (promoted from prototype-3-cockpit-split.html). No inline script, style or handlers: CSP-compliant with hud/server.py. -->
+<link rel="stylesheet" href="/static/cockpit.css">
+<script src="/static/jev-omnibus.js" defer></script>
+<script src="/static/cockpit.js" defer></script>
+</head>
+<body>
+
+<header class="cockpit-bar">
+  <div class="bar-left">
+    <strong class="brand">JEV × SECOND BRAIN // COCKPIT</strong>
+    <div class="mode-switcher" role="tablist">
+      <button class="mode-btn" data-layout="agents">MENU 1: AGENTS &amp; WORKFLOWS</button>
+      <button class="mode-btn" data-layout="obsidian">MENU 2: OBSIDIAN RING / 3D</button>
+      <button class="mode-btn active" data-layout="split">SPLIT (SYNCED)</button>
+    </div>
+  </div>
+  <div class="bar-right">
+    <button class="btn-c e2e-top-btn" id="c3-e2e-top-btn">🚀 RUN E2E PIPELINE</button>
+    <span class="tag unverified" id="c3-source" title="Where inbox/outbox and agent data came from">DATA: LOADING…</span>
+    <span title="Values copied from the index1.html mockup; not computed from the ledger">Risk <strong class="crimson" id="c3-risk"></strong> · Savings <strong class="emerald" id="c3-save"></strong> <span class="tag ask">MOCKUP</span></span>
+    <button class="btn-c" id="c3-undo-btn">Undo (<span id="c3-undo-cnt">0</span>)</button>
+    <a class="btn-c" href="/os">AI OS Dashboard</a>
+    <a class="btn-c" href="/static/index.legacy-command-center.html">Legacy view</a>
+  </div>
+</header>
+
+<div class="cockpit-grid" id="cockpit-grid">
+
+  <section class="col-pane" id="col-agents">
+    <div class="pane-header">
+      <span>01 // AGENTS, INBOX / OUTBOX</span>
+      <span class="tag done">CLICK → TRACE IN VAULT</span>
+    </div>
+    <div class="pane-body">
+      <div class="sub-card">
+        <div class="sub-head"><strong class="gold">INBOX &amp; OUTBOX</strong><span class="tag unverified" id="c3-io-count"></span></div>
+        <div id="c3-io-combined" class="stack"></div>
+      </div>
+      <div class="sub-card">
+        <div class="sub-head"><strong class="cyan">CAPABILITY ZONES (declared policy)</strong><span class="tag done">UNLISTED PLUGINS: OFF</span></div>
+        <div id="c3-agents-list" class="stack"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="col-pane" id="col-obsidian">
+    <div class="pane-header">
+      <span>02 // OBSIDIAN SECOND BRAIN</span>
+      <div class="btn-row">
+        <button class="btn-c" data-graph-mode="ring2d">Ring</button>
+        <button class="btn-c" data-graph-mode="orbital3d">3D Orbit</button>
+        <button class="btn-c" data-graph-mode="sphere3d">3D Sphere</button>
+      </div>
+    </div>
+    <div class="canvas-wrap"><canvas id="c3-canvas"></canvas></div>
+    <div class="node-foot">
+      <div class="sub-head"><strong class="cyan" id="c3-node-name"></strong><span class="tag done" id="c3-node-ring"></span></div>
+      <div class="node-desc" id="c3-node-desc"></div>
+    </div>
+  </section>
+
+  <aside class="col-pane">
+    <div class="pane-header">
+      <span>03 // PROJECT ASSISTANT</span>
+      <span class="tag done" id="c3-outcome">OUTCOME: —</span>
+    </div>
+    <div class="pane-body mono-sm" id="c3-chat"></div>
+    <div class="chat-input">
+      <button class="btn-c e2e-btn" id="c3-e2e-btn">🚀 Run E2E Invoice → Outbox Pipeline</button>
+      <div class="section-label">10 Levels of JEV Actions:</div>
+      <div class="btn-row wrap">
+        <button class="btn-c level-btn" data-level="3">⚡ L3: Composite Score</button>
+        <button class="btn-c level-btn" data-level="4">🛡️ L4: Confidence Gate</button>
+        <button class="btn-c level-btn" data-level="6">🪝 L6: Guardrail Hooks</button>
+        <button class="btn-c level-btn" data-level="8">📄 L8: Cheap Read</button>
+        <button class="btn-c level-btn" data-level="9">🌐 L9: Multi-File Scout</button>
+        <button class="btn-c level-btn" data-level="10">🤖 L10: Agentic Jev</button>
+      </div>
+      <div class="section-label">Quick Vault Inquiries:</div>
+      <div class="btn-row wrap">
+        <button class="btn-c" data-quick="Inspect Jev Market Judgment and JudgmentBoundary">Jev Market Judgment</button>
+        <button class="btn-c" data-quick="Check Inbox and Outbox diode queues">Inbox/Outbox</button>
+        <button class="btn-c" data-quick="Verify Optional Budgeting disabled state">Budgeting rule</button>
+      </div>
+      <div class="btn-row">
+        <input type="text" id="c3-input" placeholder="Ask across Second Brain, JEV workspace, Mark LVI…">
+        <button class="btn-c go" id="c3-send">Ask</button>
+      </div>
+    </div>
+  </aside>
+
+</div>
+</body>
+</html>

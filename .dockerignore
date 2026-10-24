@@ -1,0 +1,35 @@
+# Git & repository metadata
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Python byte-code and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local workspace artifacts & state
+state/server
+*.log
+scratch/*.tmp*
+data/*.tmp*
+New Text Document.txt
+
+# Virtual environments & IDE configurations
+venv/
+.venv/
+env/
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Documentation source & tests not needed in runtime image
+docs/
+tests/

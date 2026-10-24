@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proactive AI Web OS — Operator Command Center</title>
+    <style>
+        :root {
+            --bg-primary: #0b0f19;
+            --bg-secondary: #111827;
+            --bg-card: #1f2937;
+            --border: #374151;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --accent-blue: #3b82f6;
+            --accent-green: #10b981;
+            --accent-yellow: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-purple: #8b5cf6;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 20px;
+        }
+
+        .title-group h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-green { background-color: rgba(16, 185, 129, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
+        .badge-yellow { background-color: rgba(245, 158, 11, 0.2); color: var(--accent-yellow); border: 1px solid var(--accent-yellow); }
+        .badge-red { background-color: rgba(239, 68, 68, 0.2); color: var(--accent-red); border: 1px solid var(--accent-red); }
+        .badge-purple { background-color: rgba(139, 92, 246, 0.2); color: var(--accent-purple); border: 1px solid var(--accent-purple); }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .card-title {
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin: 0;
+        }
+
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 0.9rem;
+        }
+
+        .telemetry-label { color: var(--text-secondary); }
+        .telemetry-value { font-family: monospace; font-weight: 600; }
+
+        .btn {
+            background-color: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: opacity 0.2s;
+        }
+
+        .btn:hover { opacity: 0.9; }
+        .btn-green { background-color: var(--accent-green); }
+        .btn-red { background-color: var(--accent-red); }
+        .btn-yellow { background-color: var(--accent-yellow); color: #000; }
+
+        pre {
+            background-color: var(--bg-secondary);
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            color: var(--accent-green);
+            overflow-x: auto;
+            border: 1px solid var(--border);
+        }
+
+        .cascade-steps {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .step {
+            flex: 1;
+            padding: 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .step.active {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="title-group">
+            <h1>Proactive AI Web OS <span class="badge badge-purple">v2.0 Next-Gen</span></h1>
+        </div>
+        <div>
+            <span class="telemetry-label">Privacy Engine:</span>
+            <span class="badge badge-green">Non-Capturing Ephemeral Diode</span>
+        </div>
+    </header>
+
+    <!-- Multi-Avenue Status Bar -->
+    <div class="card" style="margin-bottom: 20px;">
+        <div class="card-header">
+            <h3 class="card-title">Multi-Avenue Retrieval Cascade</h3>
+            <span id="active-avenue" class="badge badge-green">Primary: Diode Outbox</span>
+        </div>
+        <div class="cascade-steps">
+            <div id="step-diode" class="step active">1. Primary Diode<br>(outbox.json)</div>
+            <div id="step-ave-a" class="step">2. Avenue A<br>(SQLite ?mode=ro)</div>
+            <div id="step-ave-b" class="step">3. Avenue B<br>(Process Table)</div>
+            <div id="step-ave-c" class="step">4. Avenue C<br>(Provenance Log)</div>
+            <div id="step-ave-d" class="step">5. Avenue D<br>(JEV Diagnostic)</div>
+        </div>
+    </div>
+
+    <div class="grid">
+        <!-- Module A: Ephemeral Diode Monitor -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Air-Gapped Metadata Diode</h3>
+                <span class="badge badge-green">Zero PII / No Audio Capture</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Outbox Path:</span>
+                <span class="telemetry-value">notification-outbox/metadata_outbox.json</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Latest Event ID:</span>
+                <span id="latest-event-id" class="telemetry-value">evt-0005</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Sanitization Status:</span>
+                <span class="telemetry-value" style="color: var(--accent-green);">PASS (100% Regex Cleaned)</span>
+            </div>
+            <div style="margin-top: 15px;">
+                <button class="btn" onclick="refreshDiode()">Poll Diode Outbox</button>
+                <button class="btn btn-yellow" onclick="simulateDiodeFailure()">Simulate Diode Stale</button>
+            </div>
+        </div>
+
+        <!-- Module B: JEV System-One Troubleshooting Engine -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">JEV System-One Diagnostic Terminal</h3>
+                <span id="jev-status" class="badge badge-green">Status: RUN</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Noul Gate (Reachability):</span>
+                <span id="jev-noul" class="telemetry-value">0.98 (PASS)</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Choice Triage (Execution Health):</span>
+                <span id="jev-choice" class="telemetry-value">healthy</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Score Severity (Action Rung):</span>
+                <span id="jev-score" class="telemetry-value">Level 1 (RUN)</span>
+            </div>
+            <div style="margin-top: 15px;">
+                <button class="btn btn-purple" onclick="runJevDiagnostic()">Trigger JEV Diagnostic</button>
+            </div>
+        </div>
+
+        <!-- Module C: Human Review Gate -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">GTM Human-Review Gate</h3>
+                <span id="review-badge" class="badge badge-yellow">Needs Review</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Batch Event:</span>
+                <span class="telemetry-value">evt_07184b6f</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Prospect:</span>
+                <span class="telemetry-value">Cambridge Specialty Company</span>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin: 10px 0;">
+                Subject: <em>Reconciliation bottlenecks at Cambridge Specialty Company</em>
+            </p>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button class="btn btn-green" onclick="approveJob()">Approve</button>
+                <button class="btn btn-red" onclick="rejectJob()">Reject</button>
+                <button class="btn" onclick="resetGate()">Reset Gate</button>
+            </div>
+        </div>
+
+        <!-- Module D: Read-Only SQLite Ledger Pulse -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Avenue A: Read-Only Ledger Pulse</h3>
+                <span class="badge badge-green">mode=ro & immutable=1</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Recent Job ID:</span>
+                <span class="telemetry-value">job_sow_1792272864</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Status Graph:</span>
+                <span class="telemetry-value">queued → running → validated</span>
+            </div>
+            <div class="telemetry-row">
+                <span class="telemetry-label">Zero-Loss Accounting:</span>
+                <span class="telemetry-value" style="color: var(--accent-green);">PASS (12 = 10 + 1 + 1)</span>
+            </div>
+            <pre id="log-output">// Output Stream:
+[+] Read-Only URI Connection Active
+[+] Zero Write-Lock Contention Assured</pre>
+        </div>
+    </div>
+
+    <script>
+        function refreshDiode() {
+            document.getElementById('log-output').innerText = "[+] Polled notification-outbox/metadata_outbox.json\n[+] Event evt-0005 parsed successfully.";
+        }
+
+        function simulateDiodeFailure() {
+            // Activate Avenue A Fallback
+            document.getElementById('step-diode').classList.remove('active');
+            document.getElementById('step-ave-a').classList.add('active');
+            document.getElementById('active-avenue').className = "badge badge-yellow";
+            document.getElementById('active-avenue').innerText = "Fallback: Avenue A (DB ?mode=ro)";
+            document.getElementById('log-output').innerText = "[!] Primary Diode Stale (>300s)\n[+] Fallback triggered: Querying job_ledger.db?mode=ro";
+        }
+
+        function runJevDiagnostic() {
+            document.getElementById('jev-noul').innerText = "0.45 (LOW)";
+            document.getElementById('jev-choice').innerText = "degraded";
+            document.getElementById('jev-score').innerText = "Level 5 (REDUCE)";
+            document.getElementById('jev-status').className = "badge badge-yellow";
+            document.getElementById('jev-status').innerText = "Status: REDUCE";
+            document.getElementById('log-output').innerText = "[JEV Diagnostic] Decision Latency Spike Detected.\n[Action Rung] Throttling batch execution size.";
+        }
+
+        function approveJob() {
+            document.getElementById('review-badge').className = "badge badge-green";
+            document.getElementById('review-badge').innerText = "Approved";
+            document.getElementById('log-output').innerText = "[+] Job evt_07184b6f transitioned: needs_review -> approved\n[+] Sanitized event emitted to metadata_outbox.json";
+        }
+
+        function rejectJob() {
+            document.getElementById('review-badge').className = "badge badge-red";
+            document.getElementById('review-badge').innerText = "Quarantined";
+            document.getElementById('log-output').innerText = "[+] Job evt_07184b6f moved to Quarantine Queue.";
+        }
+
+        function resetGate() {
+            document.getElementById('review-badge').className = "badge badge-yellow";
+            document.getElementById('review-badge').innerText = "Needs Review";
+        }
+    </script>
+</body>
+</html>

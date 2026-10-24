@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JEV // AI OS</title>
+<!-- Primary dashboard. No inline script, style or handlers: served with a strict CSP by hud_server.py. -->
+<link rel="stylesheet" href="/static/os.css">
+<script src="/static/os.js" defer></script>
+</head>
+<body>
+
+<header class="os-bar">
+  <div class="bar-l">
+    <button class="btn ghost sm" type="button" id="sidebar-toggle" title="Toggle left flowchart sidebar">☰ Flow</button>
+    <strong class="brand">JEV <span class="slash">//</span> AI OS</strong>
+    <nav class="view-tabs" id="view-tabs" role="tablist" aria-label="Swipeable views">
+      <button role="tab" class="active" data-go="0">1 · Primary &amp; Obsidian</button>
+      <button role="tab" data-go="1">2 · Telemetry Matrix</button>
+      <button role="tab" data-go="2">3 · Systems &amp; Gates</button>
+    </nav>
+  </div>
+  <div class="bar-r">
+    <div class="widget-triggers" aria-label="Secondary widgets (hidden until clicked)">
+      <button class="btn sm" type="button" data-drawer="calendar" id="trig-calendar">📅 Calendar <span class="tag info" id="trig-cal-meta"></span></button>
+      <button class="btn sm" type="button" data-drawer="tracker" id="trig-tracker">📋 Tracker <span class="tag" id="trig-trk-meta"></span></button>
+    </div>
+    <span class="pill" id="stream-pill" title="Telemetry stream (Server-Sent Events from /api/os/stream)"><i class="led"></i><span id="stream-text">CONNECTING</span></span>
+    <span class="pill mono muted" id="frame-meta">no frame yet</span>
+    <time class="clock mono" id="clock"></time>
+  </div>
+</header>
+
+<div class="os-shell" id="os-shell">
+
+  <!-- =============== LEFT VERTICAL SIDEBAR: AI OS · HERMES · OFFLINE FLOWCHART =============== -->
+  <aside class="flow-sidebar" id="flow-sidebar" aria-label="Live System Flowchart Sidebar">
+    <header class="sidebar-h">
+      <div>
+        <h2>Live System Flow</h2>
+        <span class="mono muted sm-txt">AI OS · Hermes · Offline</span>
+      </div>
+      <div class="legend-mini">
+        <button class="btn ghost sm" type="button" id="sidebar-pulse-trigger" title="Trigger visual pulse check on Outbox &amp; Quarantine nodes">⚡ Pulse</button>
+        <span class="lg ok" title="Healthy"></span>
+        <span class="lg info" title="Needs review"></span>
+        <span class="lg warn" title="Warning"></span>
+        <span class="lg err" title="Unreachable / Error"></span>
+      </div>
+    </header>
+    <div class="sidebar-pulse-bar" id="sidebar-pulse-bar" hidden>
+      <span class="pulse-dot" aria-hidden="true"></span>
+      <span class="mono sm-txt" id="sidebar-pulse-text">Outbox / Quarantine active</span>
+      <button class="btn go sm" type="button" id="sidebar-pulse-action">Inspect</button>
+      <button class="btn ghost sm" type="button" id="sidebar-pulse-close" aria-label="Dismiss pulse alert">✕</button>
+    </div>
+    <div class="sidebar-svg-wrap">
+      <svg id="sidebar-flow-svg" viewBox="0 0 310 780" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Vertical flowchart of AI OS, Hermes and Offline Product with fading data transmission lines"></svg>
+    </div>
+    <footer class="sidebar-foot" id="sidebar-node-foot">
+      <div class="card-h">
+        <strong class="mono" id="sb-node-title">JEV Gates L1–L10</strong>
+        <span class="tag" id="sb-node-status">OK</span>
+      </div>
+      <div class="mono muted sm-txt" id="sb-node-metric"></div>
+      <div class="hint" id="sb-node-detail">Click any flowchart node to inspect telemetry and spotlight linked Obsidian notes.</div>
+    </footer>
+  </aside>
+
+  <!-- =============== SWIPEABLE HORIZONTAL MAIN VIEWS =============== -->
+  <main class="views" id="views">
+
+    <!-- ======================= VIEW 1: PRIMARY DASHBOARD ======================= -->
+    <section class="view" id="view-today" aria-label="Primary Dashboard">
+      <div class="primary-grid">
+
+        <!-- CENTERPIECE: INTERACTIVE OBSIDIAN KNOWLEDGE GRAPH WIDGET -->
+        <article class="card obsidian-card" id="card-obsidian">
+          <header class="card-h wrap">
+            <div class="obs-title-group">
+              <h2>Obsidian Second Brain // Live Graph</h2>
+              <span class="tag info" id="obs-stats-tag">16 notes · 31 links</span>
+            </div>
+            <div class="obs-controls">
+              <div class="btn-group" role="group" aria-label="Graph layout mode">
+                <button class="btn sm active" type="button" data-obs-mode="ring">Force Ring</button>
+                <button class="btn sm" type="button" data-obs-mode="orbit3d">3D Orbit</button>
+                <button class="btn sm" type="button" data-obs-mode="sphere3d">3D Sphere</button>
+                <button class="btn sm" type="button" data-obs-mode="hierarchy">Hierarchy</button>
+              </div>
+              <div class="btn-group" role="group" aria-label="Graph visualization plugins">
+                <button class="btn sm plug-on" type="button" data-obs-plug="flow" title="Visualize fading data flow particles between note links">⚡ Data Flow</button>
+                <button class="btn sm plug-on" type="button" data-obs-plug="activity" title="Highlight node activity halos">🔥 Activity</button>
+                <button class="btn sm plug-on" type="button" data-obs-plug="strength" title="Highlight connection strength weights between notes">🔗 Strength</button>
+              </div>
+              <input id="obs-search" class="obs-search" type="search" placeholder="Filter notes…">
+              <button class="btn ghost sm" type="button" id="obs-rescan-btn" title="Read-only rescan of Second Brain &amp; local scratch .md files">↻ Rescan</button>
+              <button class="btn go sm" type="button" id="obs-add-toggle" aria-expanded="false" title="Create a local .md note in hud-interface/scratch/ (Second Brain vault remains read-only)">+ Scratch Note</button>
+            </div>
+          </header>
+
+          <form class="add-row obs-note-form" id="obs-note-form" autocomplete="off" hidden>
+            <input id="obs-note-title" placeholder="Local scratch note title (saved in hud-interface/scratch/)" maxlength="80" required>
+            <input id="obs-note-links" placeholder="Wiki-links: core.md, verification, gtm-outbox" value="core.md, verification" maxlength="160">
+            <select id="obs-note-flow" title="Linked System Process">
+              <option value="brain" selected>Second Brain</option>
+              <option value="jev">JEV Gates</option>
+              <option value="hermes">Hermes Adapter</option>
+              <option value="harness">Reconcile Harness</option>
+              <option value="gtm">GTM Outbox</option>
+              <option value="mark">Mark LVI</option>
+              <option value="hud">Cockpit HUD</option>
+            </select>
+            <input id="obs-note-summary" placeholder="Short summary…" maxlength="200">
+            <button class="btn go sm" type="submit">Create .md</button>
+          </form>
+
+          <div class="obs-stage">
+            <canvas id="obsidian-canvas"></canvas>
+            <div class="obs-overlay-legend mono">
+              <span class="lg-dot core">Ring 0 Core</span>
+              <span class="lg-dot gov">Ring 1 Governance</span>
+              <span class="lg-dot hermes">Hermes</span>
+              <span class="lg-dot offline">Ring 2 Diodes &amp; SOW</span>
+              <span class="lg-dot vault">Local Scratch .md</span>
+            </div>
+          </div>
+
+          <footer class="obs-inspector" id="obs-inspector">
+            <div class="obs-insp-main">
+              <div class="obs-insp-head">
+                <strong class="mono" id="obs-sel-title">core.md</strong>
+                <span class="tag ok" id="obs-sel-activity">Activity 96%</span>
+                <span class="tag" id="obs-sel-ring">Ring 0</span>
+                <button class="btn go sm" type="button" id="obs-open-doc">Read Note</button>
+                <button class="btn sm" type="button" id="obs-edit-note" hidden>Edit Scratch .md</button>
+              </div>
+              <p class="hint" id="obs-sel-summary"></p>
+            </div>
+            <div class="obs-insp-links">
+              <div class="sub-label">Strongest Connected Notes (Click to hop)</div>
+              <div class="chip-row" id="obs-connected-chips"></div>
+            </div>
+          </footer>
+        </article>
+
+        <!-- RIGHT PRIMARY COLUMN: VITAL TASKS, ALERTS, EXPANDABLE GOALS & SHORTCUTS -->
+        <div class="col">
+          <article class="card" id="card-vital">
+            <header class="card-h">
+              <h2>Vital today</h2>
+              <div class="bar-r">
+                <span class="tag" id="vital-count"></span>
+                <button class="btn ghost sm" type="button" data-drawer="tracker" title="Open full Task Tracker">📋 All Tasks</button>
+              </div>
+            </header>
+            <ol class="vital-list" id="vital-list"></ol>
+          </article>
+
+          <article class="card" id="card-alerts">
+            <header class="card-h"><h2>Alerts</h2><span class="tag" id="alert-count"></span></header>
+            <ul class="alerts" id="alert-list"></ul>
+          </article>
+
+          <article class="card" id="card-goals">
+            <header class="card-h">
+              <h2>Goals &amp; Milestones</h2>
+              <button class="btn ghost sm" id="goal-add-toggle" type="button" aria-expanded="false">+ Goal</button>
+            </header>
+            <form class="add-row" id="goal-form" autocomplete="off" hidden>
+              <input id="goal-title" placeholder="What are you aiming for?" maxlength="200" required>
+              <select id="goal-horizon">
+                <option value="week">Week</option><option value="month" selected>Month</option>
+                <option value="quarter">Quarter</option><option value="year">Year</option>
+              </select>
+              <button class="btn go" type="submit">Add</button>
+            </form>
+            <div class="goal-list" id="goal-list"></div>
+          </article>
+
+          <article class="card" id="card-tools">
+            <header class="card-h"><h2>Quick Launch &amp; Shortcuts</h2></header>
+            <div class="tile-grid-4">
+              <button class="tile" type="button" data-drawer="calendar"><b>📅</b>Calendar</button>
+              <button class="tile" type="button" data-drawer="tracker"><b>📋</b>Tracker</button>
+              <button class="tile" type="button" data-sheet="editor"><b>⌨</b>Editor</button>
+              <button class="tile" type="button" data-sheet="docs"><b>☰</b>Docs</button>
+            </div>
+            <details class="more">
+              <summary>Recent scratch files &amp; doc shortcuts</summary>
+              <div class="sub-label">Scratchpad files (hud-interface/scratch/)</div>
+              <div class="chip-row" id="recent-files"></div>
+              <div class="sub-label">Documentation shortcuts</div>
+              <div class="chip-row" id="doc-links"></div>
+            </details>
+          </article>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ======================= VIEW 2: FULL FLOW & TELEMETRY MATRIX ======================= -->
+    <section class="view" id="view-flow" aria-label="Full Flowchart and Telemetry Feed">
+      <div class="flow-layout">
+        <article class="card flow-card">
+          <header class="card-h">
+            <h2>Expanded Flowchart // Active Process Transmissions</h2>
+            <div class="legend">
+              <span class="lg ok">ok</span><span class="lg info">needs you</span><span class="lg warn">warning</span>
+              <span class="lg err">down</span><span class="lg idle">idle</span><span class="lg pulse">fading transmission</span>
+            </div>
+          </header>
+          <div class="flow-canvas">
+            <svg id="flow-svg" viewBox="0 0 1120 620" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Expanded flowchart of the AI OS, Hermes and the offline product"></svg>
+          </div>
+        </article>
+        <aside class="flow-side">
+          <article class="card">
+            <header class="card-h"><h2>Process Node</h2><span class="tag" id="node-status"></span></header>
+            <div id="node-detail" class="node-detail"><p class="hint">Click a node to inspect it.</p></div>
+          </article>
+          <article class="card grow">
+            <header class="card-h"><h2>Live Transmission Feed</h2><span class="tag" id="feed-count">0</span></header>
+            <ol class="feed" id="change-feed"></ol>
+          </article>
+        </aside>
+      </div>
+
+      <div class="telemetry-probe-grid">
+        <article class="card" id="card-endpoint-probe">
+          <header class="card-h">
+            <h2>Connection Telemetry &amp; Endpoint Probe</h2>
+            <div class="bar-r">
+              <span class="tag ok" id="ep-probe-summary">Ready</span>
+              <button class="btn go sm" type="button" id="run-endpoint-probe">↻ Probe All Endpoints</button>
+            </div>
+          </header>
+          <div class="ep-probe-list" id="endpoint-probe-list"></div>
+        </article>
+
+        <article class="card" id="card-data-logs">
+          <header class="card-h">
+            <h2>Recent Timestamped Data Logs</h2>
+            <div class="bar-r">
+              <span class="tag info" id="data-logs-tag">Live</span>
+              <button class="btn ghost sm" type="button" id="refresh-data-logs">↻ Refresh Logs</button>
+            </div>
+          </header>
+          <ul class="guard-list" id="live-data-logs"></ul>
+        </article>
+      </div>
+    </section>
+
+    <!-- ======================= VIEW 3: SYSTEMS & GUARDRAILS ======================= -->
+    <section class="view" id="view-systems" aria-label="Systems">
+      <div class="systems-grid">
+        <article class="card">
+          <header class="card-h"><h2>E2E pipeline</h2><span class="tag" id="e2e-tag">idle</span></header>
+          <p class="hint">Runs the 5-stage invoice → outbox pipeline (Levels 3–10). Stages one draft as <b>needs_review</b>. Nothing is sent automatically.</p>
+          <button class="btn go" type="button" id="run-e2e">🚀 Run E2E pipeline</button>
+          <ol class="stage-list" id="e2e-stages"></ol>
+        </article>
+        <article class="card">
+          <header class="card-h"><h2>Hermes probe</h2><span class="tag" id="probe-tag">idle</span></header>
+          <p class="hint">Strict probe of the local model on 127.0.0.1:8080. Simulation is disabled, so an offline model reports honestly.</p>
+          <button class="btn" type="button" id="run-probe">Run strict probe</button>
+          <pre class="mono-box" id="probe-out"></pre>
+        </article>
+        <article class="card">
+          <header class="card-h"><h2>Guardrail log</h2><span class="tag" id="guard-tag"></span></header>
+          <p class="hint">Level 6 pre-execution blocks, newest first.</p>
+          <ul class="guard-list" id="guard-list"></ul>
+        </article>
+        <article class="card">
+          <header class="card-h"><h2>Other views</h2></header>
+          <div class="tile-grid">
+            <a class="tile" href="/cockpit"><b>◎</b>Synced cockpit</a>
+            <a class="tile" href="/legacy"><b>▤</b>Legacy HUD</a>
+            <a class="tile" href="/prototype-1-ring-command.html"><b>◍</b>Ring prototype</a>
+            <a class="tile" href="/prototype-2-minimal-3d.html"><b>◇</b>3D prototype</a>
+          </div>
+        </article>
+        <article class="card">
+          <header class="card-h"><h2>Telemetry stream</h2><span class="tag" id="stream-tag"></span></header>
+          <dl class="kv" id="stream-stats"></dl>
+          <p class="hint">Compact SSE stream carrying counts, node activity, and connection states only (zero PII, zero financial floats).</p>
+        </article>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- =============== HIDDEN SECONDARY WIDGET DRAWERS (TRIGGERED BY CLICKING) =============== -->
+<div class="drawer-scrim" id="drawer-scrim" hidden></div>
+
+<!-- SECONDARY WIDGET 1: SMART CALENDAR (HIDDEN UNTIL CLICKED) -->
+<section class="widget-drawer" id="drawer-calendar" role="dialog" aria-modal="true" aria-labelledby="cal-drawer-title" hidden>
+  <header class="sheet-h">
+    <h2 id="cal-drawer-title">📅 Smart Calendar &amp; Automated Scheduler</h2>
+    <span class="tag" id="plan-day"></span>
+    <button class="btn ghost sm" type="button" data-close-drawer aria-label="Close calendar">✕</button>
+  </header>
+  <div class="sheet-body">
+    <div class="daybar" id="daybar" aria-hidden="true"></div>
+    <div class="plan-meta mono" id="plan-meta"></div>
+    <ul class="agenda" id="agenda"></ul>
+    <div id="unscheduled"></div>
+    <details class="more">
+      <summary>Add fixed event</summary>
+      <form class="add-row" id="event-form" autocomplete="off">
+        <input id="event-title" placeholder="Event title" maxlength="200" required>
+        <input id="event-date" type="date" required>
+        <input id="event-start" type="time" required value="10:00">
+        <input id="event-end" type="time" required value="10:30">
+        <button class="btn go" type="submit">Add</button>
+      </form>
+    </details>
+    <details class="more">
+      <summary>Workday hours &amp; .ics calendar files</summary>
+      <form class="add-row" id="settings-form">
+        <label class="field">Start <input id="set-start" type="time" required></label>
+        <label class="field">End <input id="set-end" type="time" required></label>
+        <label class="field">Buffer <input id="set-buffer" class="num" type="number" min="0" max="60" step="5"> min</label>
+        <button class="btn" type="submit">Save</button>
+      </form>
+      <p class="hint" id="ics-hint"></p>
+    </details>
+    <details class="more">
+      <summary>Next 7 days</summary>
+      <ul class="agenda compact" id="upcoming"></ul>
+    </details>
+  </div>
+</section>
+
+<!-- SECONDARY WIDGET 2: TASK TRACKER KANBAN (HIDDEN UNTIL CLICKED) -->
+<section class="widget-drawer" id="drawer-tracker" role="dialog" aria-modal="true" aria-labelledby="trk-drawer-title" hidden>
+  <header class="sheet-h">
+    <h2 id="trk-drawer-title">📋 Task Tracker &amp; Kanban Board</h2>
+    <span class="tag" id="task-count"></span>
+    <button class="btn ghost sm" type="button" data-close-drawer aria-label="Close task tracker">✕</button>
+  </header>
+  <div class="sheet-body">
+    <form class="add-row" id="task-form" autocomplete="off">
+      <input id="task-title" placeholder="Add a task and press Enter" maxlength="200" required>
+      <select id="task-priority" title="Priority (P1 is highest)">
+        <option value="1">P1</option><option value="2" selected>P2</option><option value="3">P3</option>
+      </select>
+      <input id="task-est" class="num" type="number" min="5" max="480" step="5" value="30" title="Estimate in minutes">
+      <label class="star-toggle" title="Vital: pin to Primary Dashboard and schedule first"><input type="checkbox" id="task-vital"><span>★</span></label>
+      <button class="btn go" type="submit">Add</button>
+    </form>
+    <details class="more">
+      <summary>Due date &amp; goal assignment</summary>
+      <div class="add-row">
+        <label class="field">Due <input type="date" id="task-due"></label>
+        <label class="field">Goal <select id="task-goal"><option value="">None</option></select></label>
+      </div>
+    </details>
+    <div class="kanban" id="kanban">
+      <div class="lane" data-lane="todo"><h3>To do <span id="n-todo"></span></h3><div class="lane-body" id="lane-todo"></div></div>
+      <div class="lane" data-lane="doing"><h3>Doing <span id="n-doing"></span></h3><div class="lane-body" id="lane-doing"></div></div>
+      <div class="lane" data-lane="done"><h3>Done <span id="n-done"></span></h3><div class="lane-body" id="lane-done"></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- =============== SWIPE DOTS & PERSISTENT BOTTOM DOCK =============== -->
+<div class="dots" id="dots" aria-hidden="true">
+  <button class="dot active" data-go="0" tabindex="-1"></button>
+  <button class="dot" data-go="1" tabindex="-1"></button>
+  <button class="dot" data-go="2" tabindex="-1"></button>
+</div>
+
+<nav class="dock" id="dock" aria-label="Essentials Dock">
+  <button class="dock-btn" type="button" data-sheet="inbox"><i>⇣</i><span>Inbox</span><b class="badge" id="badge-inbox" hidden></b></button>
+  <button class="dock-btn" type="button" data-sheet="outbox"><i>⇡</i><span>Outbox</span><b class="badge" id="badge-outbox" hidden></b></button>
+  <button class="dock-btn" type="button" data-drawer="calendar"><i>📅</i><span>Calendar</span></button>
+  <button class="dock-btn" type="button" data-drawer="tracker"><i>📋</i><span>Tracker</span></button>
+  <button class="dock-btn" type="button" data-sheet="alerts"><i>⚠</i><span>Alerts</span><b class="badge warn" id="badge-alerts" hidden></b></button>
+  <span class="dock-sep" aria-hidden="true"></span>
+  <button class="dock-btn" type="button" data-go="0"><i>◈</i><span>Obsidian</span></button>
+  <button class="dock-btn" type="button" data-go="1"><i>⌬</i><span>Flow</span></button>
+  <button class="dock-btn" type="button" data-sheet="editor"><i>⌨</i><span>Editor</span></button>
+  <button class="dock-btn" type="button" data-sheet="docs"><i>☰</i><span>Docs</span></button>
+</nav>
+
+<div class="scrim" id="scrim" hidden></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+  <header class="sheet-h">
+    <h2 id="sheet-title"></h2>
+    <div class="sheet-actions" id="sheet-actions"></div>
+    <button class="btn ghost sm" type="button" id="sheet-close" aria-label="Close">✕</button>
+  </header>
+  <div class="sheet-body" id="sheet-body"></div>
+</section>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+</body>
+</html>

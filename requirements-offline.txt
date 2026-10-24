@@ -1,0 +1,2 @@
+# Only offline_telemetry.py requires this package; the HUD and observer are stdlib.
+pydantic>=2.10,<3
