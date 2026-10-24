@@ -82,4 +82,4 @@ REMOTE_EOF
 
 echo ""
 echo "[3/3] Deployment complete!"
-echo "      Open your AIOS Command Center at: http://${VPS_IP}:${PORT}/"
+echo "      Open your AIOS Command Center at:http://${VPS_IP}:${PORT}/"
