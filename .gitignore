@@ -5,3 +5,4 @@ inbox/
 *.pid
 *.lock
 .venv/
+.env
