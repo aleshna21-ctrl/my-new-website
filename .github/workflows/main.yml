@@ -63,7 +63,7 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 if command -v ufw >/dev/null 2>&1; then
-    run: ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 root@82.25.249.27 './deploy_hostinger.sh'
+    run: "ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_ed25519 root@82.25.249.27 './deploy_hostinger.sh'"
         echo "---> [VPS] Allowing TCP port ${PORT} in UFW firewall..."
         ufw allow "${PORT}/tcp" >/dev/null || true
     fi
