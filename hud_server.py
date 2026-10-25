@@ -43,6 +43,8 @@ def probe_hermes_live() -> dict:
 def get_hermes_telemetry() -> dict:
     live = probe_hermes_live()
     t_file = os.path.join(OFFLINE_DIR, "inference_telemetry.json")
+    if not os.path.exists(t_file):
+        t_file = os.path.join(HUD_DIR, "inference_telemetry.json")
     saved = {}
     if os.path.exists(t_file):
         try:
