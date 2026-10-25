@@ -64,6 +64,7 @@
       </div>
       <div class="mono muted sm-txt" id="sb-node-metric"></div>
       <div class="hint" id="sb-node-detail">Click any flowchart node to inspect telemetry and spotlight linked Obsidian notes.</div>
+      <div class="node-actions-bar" id="sb-node-actions"></div>
     </footer>
   </aside>
 
@@ -254,6 +255,49 @@
     <!-- ======================= VIEW 3: SYSTEMS & GUARDRAILS ======================= -->
     <section class="view" id="view-systems" aria-label="Systems">
       <div class="systems-grid">
+        <article class="card span-full" id="card-calibrated-control">
+          <header class="card-h">
+            <div>
+              <h2>Calibrated Endpoint Command Console</h2>
+              <span class="mono muted sm-txt">Full Command Execution Privileges Over Monitoring &amp; Control Endpoints</span>
+            </div>
+            <div class="bar-r">
+              <span class="tag ok" id="cmd-privilege-badge">Privilege: Operator Level 10</span>
+              <button class="btn ghost sm" type="button" id="clear-cmd-console">Clear Output</button>
+            </div>
+          </header>
+          <div class="cmd-console-body">
+            <div class="cmd-quick-bar" aria-label="Calibrated execution commands">
+              <button class="btn sm go" type="button" data-cmd="probe-8080">⚡ Probe Hermes (8080)</button>
+              <button class="btn sm ok" type="button" data-cmd="dispatch-alerts">⚡ Dispatch Alerts (SMTP)</button>
+              <button class="btn sm" type="button" data-cmd="cycle-ledger">⚡ Cycle Ledger (SQLite)</button>
+              <button class="btn sm" type="button" data-cmd="e2e-run">⚡ Run E2E Pipeline</button>
+              <button class="btn sm" type="button" data-cmd="decide-system1">⚡ JEV System-One</button>
+              <button class="btn sm" type="button" data-cmd="rung-eval">⚡ 7 Market Judgments</button>
+              <button class="btn sm" type="button" data-cmd="cheap-read">⚡ Cheap Read Fixture</button>
+              <button class="btn sm" type="button" data-cmd="vault-scout">⚡ Vault Multi-File Scout</button>
+              <button class="btn sm" type="button" data-cmd="rescan-vault">↻ Rescan Second Brain</button>
+            </div>
+
+            <div class="cmd-guardrail-bar">
+              <span class="mono muted sm-txt">Guardrail Command Gate (Level 6 Pre-Execution Screen):</span>
+              <div class="cmd-input-group">
+                <input id="guardrail-cmd-input" class="cmd-input mono" placeholder="Enter bash command to evaluate against L6 guardrail gate..." value="echo 'JEV system check'">
+                <button class="btn sm go" type="button" id="btn-run-guardrail-cmd">Gate &amp; Screen Command</button>
+              </div>
+              <div class="cmd-presets mono sm-txt">
+                <span>Presets:</span>
+                <button class="btn ghost sm" type="button" data-preset="echo 'Autonomous AI OS Status Check'">Safe Echo</button>
+                <button class="btn ghost sm danger" type="button" data-preset="rm -rf /production/ledger">Test Destructive rm -rf</button>
+                <button class="btn ghost sm danger" type="button" data-preset="cat ~/.ssh/id_rsa">Test Key Leak</button>
+                <button class="btn ghost sm" type="button" data-preset="python -c &quot;print('Health probe OK')&quot;">Python Test</button>
+              </div>
+            </div>
+
+            <pre class="mono-box console-box" id="cmd-console-output" aria-live="polite">Ready. Click any calibrated command button above or enter a bash command to evaluate under Level 6 least-privilege security policy.</pre>
+          </div>
+        </article>
+
         <article class="card">
           <header class="card-h"><h2>E2E pipeline</h2><span class="tag" id="e2e-tag">idle</span></header>
           <p class="hint">Runs the 5-stage invoice → outbox pipeline (Levels 3–10). Stages one draft as <b>needs_review</b>. Nothing is sent automatically.</p>

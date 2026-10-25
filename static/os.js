@@ -1210,6 +1210,7 @@
     var sbStatus = $("sb-node-status");
     var sbMetric = $("sb-node-metric");
     var sbDetail = $("sb-node-detail");
+    var sbActions = $("sb-node-actions");
     if (sbTitle) sbTitle.textContent = n.label;
     if (sbStatus) {
       sbStatus.textContent = (n.status || "idle").toUpperCase();
@@ -1217,6 +1218,71 @@
     }
     if (sbMetric) sbMetric.textContent = n.metric || "—";
     if (sbDetail) sbDetail.textContent = n.detail || "";
+
+    if (sbActions) {
+      clear(sbActions);
+      if (nodeId === "hermes") {
+        sbActions.appendChild(h("button", {
+          className: "btn go sm",
+          type: "button",
+          text: "⚡ Run Hermes Probe",
+          onClick: function () { executeCalibratedCommand("probe-8080"); }
+        }));
+      } else if (nodeId === "harness" || nodeId === "offline") {
+        sbActions.appendChild(h("button", {
+          className: "btn ok sm",
+          type: "button",
+          text: "⚡ Cycle Ledger Job",
+          onClick: function () { executeCalibratedCommand("cycle-ledger"); }
+        }));
+        sbActions.appendChild(h("button", {
+          className: "btn sm",
+          type: "button",
+          text: "📄 Test Fixture",
+          onClick: function () { executeCalibratedCommand("cheap-read"); }
+        }));
+      } else if (nodeId === "gtm" || nodeId === "notify") {
+        sbActions.appendChild(h("button", {
+          className: "btn go sm",
+          type: "button",
+          text: "⚡ Dispatch Alerts",
+          onClick: function () { executeCalibratedCommand("dispatch-alerts"); }
+        }));
+        sbActions.appendChild(h("button", {
+          className: "btn sm",
+          type: "button",
+          text: "📑 Outbox Sheet",
+          onClick: function () { openSheet("outbox"); }
+        }));
+      } else if (nodeId === "jev") {
+        sbActions.appendChild(h("button", {
+          className: "btn go sm",
+          type: "button",
+          text: "⚡ Screen Bash",
+          onClick: function () { executeCalibratedCommand("guardrail-test"); }
+        }));
+        sbActions.appendChild(h("button", {
+          className: "btn sm",
+          type: "button",
+          text: "🚀 Run E2E",
+          onClick: function () { executeCalibratedCommand("e2e-run"); }
+        }));
+      } else if (nodeId === "brain") {
+        sbActions.appendChild(h("button", {
+          className: "btn sm",
+          type: "button",
+          text: "↻ Rescan Vault",
+          onClick: function () { executeCalibratedCommand("rescan-vault"); }
+        }));
+      } else if (nodeId === "aios" || nodeId === "cockpit") {
+        sbActions.appendChild(h("button", {
+          className: "btn sm",
+          type: "button",
+          text: "↻ Probe Endpoints",
+          onClick: function () { runEndpointProbe(); }
+        }));
+      }
+    }
 
     // Update View 2 Inspector
     var box = $("node-detail");
@@ -1231,21 +1297,26 @@
     box.appendChild(h("div", { text: "Metric: " + (n.metric || "—") }));
     box.appendChild(h("div", { className: "muted", text: n.detail || "" }));
 
-    if (nodeId === "gtm" || nodeId === "notify") {
-      box.appendChild(h("button", {
-        className: "btn go sm",
-        type: "button",
-        text: "Open Outbox Diode",
-        onClick: function () { openSheet("outbox"); }
-      }));
+    var v2Actions = h("div", { className: "node-actions-bar" });
+    if (nodeId === "hermes") {
+      v2Actions.appendChild(h("button", { className: "btn go sm", type: "button", text: "⚡ Run Hermes 8080 Probe", onClick: function () { executeCalibratedCommand("probe-8080"); } }));
+    } else if (nodeId === "harness" || nodeId === "offline") {
+      v2Actions.appendChild(h("button", { className: "btn ok sm", type: "button", text: "⚡ Cycle SQLite Ledger", onClick: function () { executeCalibratedCommand("cycle-ledger"); } }));
+      v2Actions.appendChild(h("button", { className: "btn sm", type: "button", text: "📄 Cheap Read Fixture", onClick: function () { executeCalibratedCommand("cheap-read"); } }));
+    } else if (nodeId === "gtm" || nodeId === "notify") {
+      v2Actions.appendChild(h("button", { className: "btn go sm", type: "button", text: "⚡ Dispatch SMTP Alerts", onClick: function () { executeCalibratedCommand("dispatch-alerts"); } }));
+      v2Actions.appendChild(h("button", { className: "btn sm", type: "button", text: "Open Outbox Diode", onClick: function () { openSheet("outbox"); } }));
     } else if (nodeId === "inbox") {
-      box.appendChild(h("button", {
-        className: "btn go sm",
-        type: "button",
-        text: "Open Inbox Diode",
-        onClick: function () { openSheet("inbox"); }
-      }));
+      v2Actions.appendChild(h("button", { className: "btn go sm", type: "button", text: "Open Inbox Diode", onClick: function () { openSheet("inbox"); } }));
+    } else if (nodeId === "jev") {
+      v2Actions.appendChild(h("button", { className: "btn go sm", type: "button", text: "⚡ Screen Bash Guardrail", onClick: function () { executeCalibratedCommand("guardrail-test"); } }));
+      v2Actions.appendChild(h("button", { className: "btn sm", type: "button", text: "🚀 Run E2E Pipeline", onClick: function () { executeCalibratedCommand("e2e-run"); } }));
+      v2Actions.appendChild(h("button", { className: "btn sm", type: "button", text: "🧠 System-One Eval", onClick: function () { executeCalibratedCommand("decide-system1"); } }));
+    } else if (nodeId === "brain") {
+      v2Actions.appendChild(h("button", { className: "btn sm", type: "button", text: "↻ Rescan Second Brain", onClick: function () { executeCalibratedCommand("rescan-vault"); } }));
+      v2Actions.appendChild(h("button", { className: "btn sm", type: "button", text: "🔍 Scout Vault Notes", onClick: function () { executeCalibratedCommand("vault-scout"); } }));
     }
+    box.appendChild(v2Actions);
   }
 
   // ==================== INTERACTIVE OBSIDIAN SECOND BRAIN GRAPH WIDGET ====================
@@ -1866,6 +1937,42 @@
       });
     }
 
+    // --- Wire Calibrated Command Console ---
+    document.querySelectorAll("[data-cmd]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        executeCalibratedCommand(btn.dataset.cmd);
+      });
+    });
+
+    var guardCmdBtn = $("btn-run-guardrail-cmd");
+    var guardCmdInput = $("guardrail-cmd-input");
+    if (guardCmdBtn && guardCmdInput) {
+      guardCmdBtn.addEventListener("click", function () {
+        executeCalibratedCommand("guardrail-test", guardCmdInput.value.trim());
+      });
+      guardCmdInput.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          executeCalibratedCommand("guardrail-test", guardCmdInput.value.trim());
+        }
+      });
+    }
+
+    document.querySelectorAll("[data-preset]").forEach(function (pBtn) {
+      pBtn.addEventListener("click", function () {
+        if (guardCmdInput) guardCmdInput.value = pBtn.dataset.preset;
+        executeCalibratedCommand("guardrail-test", pBtn.dataset.preset);
+      });
+    });
+
+    var clearConsoleBtn = $("clear-cmd-console");
+    if (clearConsoleBtn) {
+      clearConsoleBtn.addEventListener("click", function () {
+        var out = $("cmd-console-output");
+        if (out) out.textContent = "Console output cleared. Ready for next command.";
+      });
+    }
+
     var epProbeBtn = $("run-endpoint-probe");
     if (epProbeBtn) {
       epProbeBtn.addEventListener("click", function () {
@@ -1883,25 +1990,108 @@
     var probeBtn = $("run-probe");
     if (probeBtn) {
       probeBtn.addEventListener("click", function () {
-        var tag = $("probe-tag");
-        var out = $("probe-out");
-        if (tag) { tag.textContent = "probing…"; tag.className = "tag warn"; }
-        probeBtn.disabled = true;
-        api("/api/hermes/probe", { method: "POST", body: { allow_simulation: false } }).then(function (res) {
-          if (tag) { tag.textContent = res.status || "ok"; tag.className = "tag ok"; }
-          if (out) out.textContent = JSON.stringify(res, null, 2);
-          refreshTelemetryOnce();
-        }).catch(function (err) {
-          if (tag) { tag.textContent = "unreachable"; tag.className = "tag err"; }
-          if (out) out.textContent = err.message;
-        }).finally(function () {
-          probeBtn.disabled = false;
-        });
+        executeCalibratedCommand("probe-8080");
       });
     }
 
     loadSystemLogs();
     runEndpointProbe();
+  }
+
+  function executeCalibratedCommand(cmd, customInput) {
+    var out = $("cmd-console-output");
+    var badge = $("cmd-privilege-badge");
+    if (badge) { badge.textContent = "Executing " + cmd + "…"; badge.className = "tag warn"; }
+
+    function logOut(title, data, isErr) {
+      if (badge) { badge.textContent = "Operator Level 10 Active"; badge.className = "tag ok"; }
+      var text = typeof data === "object" ? JSON.stringify(data, null, 2) : String(data);
+      var line = "[" + new Date().toISOString() + "] COMMAND EXECUTION: " + title + "\n" + text;
+      if (out) out.textContent = line;
+      var probeOut = $("probe-out");
+      if (probeOut && cmd === "probe-8080") probeOut.textContent = text;
+      var probeTag = $("probe-tag");
+      if (probeTag && cmd === "probe-8080") {
+        probeTag.textContent = isErr ? "unreachable" : (data.status || "ok");
+        probeTag.className = "tag " + (isErr ? "err" : "ok");
+      }
+      toast(title + (isErr ? " failed" : " executed"));
+      refreshTelemetryOnce();
+      loadLiveDataLogs();
+    }
+
+    if (cmd === "probe-8080") {
+      api("/api/hermes/probe", { method: "POST", body: { allow_simulation: false } })
+        .then(function (res) { logOut("POST /api/hermes/probe (Strict Live 8080)", res); })
+        .catch(function (err) { logOut("POST /api/hermes/probe", err.message, true); });
+    } else if (cmd === "dispatch-alerts") {
+      api("/api/alerts/dispatch", { method: "POST" })
+        .then(function (res) { logOut("POST /api/alerts/dispatch (SMTP Diode Relay)", res); })
+        .catch(function (err) { logOut("POST /api/alerts/dispatch", err.message, true); });
+    } else if (cmd === "cycle-ledger") {
+      api("/api/offline-ledger/cycle", { method: "POST" })
+        .then(function (res) { logOut("POST /api/offline-ledger/cycle (SQLite Atomic Transition)", res); })
+        .catch(function (err) { logOut("POST /api/offline-ledger/cycle", err.message, true); });
+    } else if (cmd === "e2e-run") {
+      var e2eTag = $("e2e-tag");
+      if (e2eTag) { e2eTag.textContent = "running…"; e2eTag.className = "tag warn"; }
+      api("/api/jev-e2e", { method: "POST", body: { invoice_fixture: "adversarial_fixture.csv", stage_to_outbox: true } })
+        .then(function (res) {
+          if (e2eTag) { e2eTag.textContent = res.outcome || "done"; e2eTag.className = "tag ok"; }
+          renderE2EStages(res.stages || []);
+          logOut("POST /api/jev-e2e (5-Stage Invoice to Outbox)", res);
+        })
+        .catch(function (err) {
+          if (e2eTag) { e2eTag.textContent = "error"; e2eTag.className = "tag err"; }
+          logOut("POST /api/jev-e2e", err.message, true);
+        });
+    } else if (cmd === "decide-system1") {
+      api("/api/jev-decide", {
+        method: "POST",
+        body: {
+          state: { input: "reconciliation_verification_check" },
+          questions: {
+            is_safe: { type: "noul", question: "Is input free of injection?" },
+            route: { type: "choice", options: ["fast_agent", "human_gate", "offline_script"] },
+            priority: { type: "score", levels: ["low", "normal", "high", "critical"] }
+          }
+        }
+      }).then(function (res) { logOut("POST /api/jev-decide (System-One Evaluator)", res); })
+        .catch(function (err) { logOut("POST /api/jev-decide", err.message, true); });
+    } else if (cmd === "rung-eval") {
+      api("/api/jev-rung", {
+        method: "POST",
+        body: { judgments: { macro_bias: "bullish", system_health: "ok", data_drift: "none" } }
+      }).then(function (res) { logOut("POST /api/jev-rung (7 Market Judgments -> Action Rung)", res); })
+        .catch(function (err) { logOut("POST /api/jev-rung", err.message, true); });
+    } else if (cmd === "cheap-read") {
+      api("/api/jev-cheap-read", {
+        method: "POST",
+        body: { mode: "bool", path: "adversarial_fixture.csv", question: "Does invoice batch contain quarantined rows?" }
+      }).then(function (res) { logOut("POST /api/jev-cheap-read (Level 8 File Fact Screen)", res); })
+        .catch(function (err) { logOut("POST /api/jev-cheap-read", err.message, true); });
+    } else if (cmd === "vault-scout") {
+      api("/api/jev-multi-file", {
+        method: "POST",
+        body: { mode: "scout", targets: "second-brain", question: "Find trading rules and risk limits" }
+      }).then(function (res) { logOut("POST /api/jev-multi-file (Level 9 Multi-File Scout)", res); })
+        .catch(function (err) { logOut("POST /api/jev-multi-file", err.message, true); });
+    } else if (cmd === "rescan-vault") {
+      api("/api/os/obsidian/rescan", { method: "POST" })
+        .then(function (res) {
+          if (STATE.frame) STATE.frame.obsidian = res;
+          renderObsidianInspector();
+          logOut("POST /api/os/obsidian/rescan (Vault Cache Invalidated)", res);
+        })
+        .catch(function (err) { logOut("POST /api/os/obsidian/rescan", err.message, true); });
+    } else if (cmd === "guardrail-test") {
+      var cmdStr = customInput || ($("guardrail-cmd-input") && $("guardrail-cmd-input").value) || "echo 'JEV system check'";
+      api("/api/guardrail/bash", { method: "POST", body: { command: cmdStr } })
+        .then(function (res) {
+          logOut("POST /api/guardrail/bash (L6 Pre-Execution Screen: " + cmdStr + ")", res);
+        })
+        .catch(function (err) { logOut("POST /api/guardrail/bash", err.message, true); });
+    }
   }
 
   function runEndpointProbe() {
@@ -1913,41 +2103,62 @@
       summaryTag.className = "tag warn";
     }
 
-    var endpoints = [
-      "/api/os/telemetry",
-      "/api/os/obsidian",
-      "/api/os/board",
-      "/api/os/inbox",
-      "/api/os/outbox",
-      "/api/os/docs",
-      "/api/offline-ledger",
-      "/api/guardrail/events",
-      "/api/jev-e2e/events",
-      "/api/hermes"
+    var calibratedEndpoints = [
+      { ep: "/api/os/telemetry", method: "GET", desc: "Live OS telemetry stream snapshot & node matrix" },
+      { ep: "/api/os/obsidian", method: "GET", desc: "Obsidian Second Brain 4-ring notes & wiki-links" },
+      { ep: "/api/os/obsidian/rescan", method: "POST", desc: "Invalidates & re-indexes Second Brain vault notes", cmd: "rescan-vault" },
+      { ep: "/api/os/board", method: "GET", desc: "Task tracking, calendar day plan, milestones" },
+      { ep: "/api/os/inbox", method: "GET", desc: "Read-only offline inbox snapshot & ledger jobs" },
+      { ep: "/api/os/outbox", method: "GET", desc: "Staged outreach queue & metadata diode outbox" },
+      { ep: "/api/os/docs", method: "GET", desc: "Zero-PII architecture & diode documentation" },
+      { ep: "/api/offline-ledger", method: "GET", desc: "Zero-float job ledger inspection (?mode=ro)" },
+      { ep: "/api/offline-ledger/cycle", method: "POST", desc: "Executes atomic queued->running->completed transition", cmd: "cycle-ledger" },
+      { ep: "/api/alerts", method: "GET", desc: "Sanitized outbox event queue & dispatch logs" },
+      { ep: "/api/alerts/dispatch", method: "POST", desc: "Relays outbox metadata transitions via Gmail SMTP", cmd: "dispatch-alerts" },
+      { ep: "/api/hermes", method: "GET", desc: "Cached local model status & token usage" },
+      { ep: "/api/hermes/probe", method: "POST", desc: "Strict live inference probe on 127.0.0.1:8080", cmd: "probe-8080" },
+      { ep: "/api/guardrail/bash", method: "POST", desc: "Level 6 pre-execution destructive command gate", cmd: "guardrail-test" },
+      { ep: "/api/guardrail/events", method: "GET", desc: "Level 6 security audit log of command gates" },
+      { ep: "/api/jev-e2e", method: "POST", desc: "5-Stage invoice to GTM diode pipeline (Levels 3-10)", cmd: "e2e-run" },
+      { ep: "/api/jev-agentic/events", method: "GET", desc: "Mark LVI ask_jev agentic execution telemetry" },
+      { ep: "/api/omnibus", method: "GET", desc: "Multi-zone agent capability policies & ring contracts" }
     ];
+
     var origin = window.location.origin || "http://127.0.0.1:5050";
 
-    Promise.all(endpoints.map(function (ep) {
+    Promise.all(calibratedEndpoints.map(function (item) {
       var t0 = performance.now();
-      return fetch(ep, { headers: { Accept: "application/json" } }).then(function (res) {
+      var reqOpts = { headers: { Accept: "application/json" } };
+      if (item.method === "POST") {
+        reqOpts.method = "POST";
+        reqOpts.headers["Content-Type"] = "application/json";
+        if (item.ep === "/api/hermes/probe") reqOpts.body = JSON.stringify({ allow_simulation: false });
+        else if (item.ep === "/api/guardrail/bash") reqOpts.body = JSON.stringify({ command: "echo 'calibrated probe'" });
+        else if (item.ep === "/api/jev-e2e") reqOpts.body = JSON.stringify({ stage_to_outbox: true });
+        else reqOpts.body = JSON.stringify({});
+      }
+
+      return fetch(item.ep, reqOpts).then(function (res) {
         return res.text().then(function (raw) {
           return {
-            ep: ep,
-            url: origin + ep,
+            item: item,
+            url: origin + item.ep,
             status: res.status,
             ok: res.ok,
             bytes: raw.length,
-            ms: Math.round(performance.now() - t0)
+            ms: Math.round(performance.now() - t0),
+            raw: raw
           };
         });
       }).catch(function () {
         return {
-          ep: ep,
-          url: origin + ep,
+          item: item,
+          url: origin + item.ep,
           status: 0,
           ok: false,
           bytes: 0,
-          ms: Math.round(performance.now() - t0)
+          ms: Math.round(performance.now() - t0),
+          raw: ""
         };
       });
     })).then(function (results) {
@@ -1955,17 +2166,49 @@
       var okCount = 0;
       results.forEach(function (r) {
         if (r.ok) okCount += 1;
-        box.appendChild(h("div", { className: "ep-row" }, [
-          h("span", { className: "ep-url", title: r.url, text: r.url }),
-          h("div", { className: "ep-metrics" }, [
-            h("span", { className: "muted", text: r.bytes + " B" }),
-            h("span", { className: "muted", text: r.ms + " ms" }),
-            h("span", { className: "tag " + (r.ok ? "ok" : "err"), text: r.status ? ("HTTP " + r.status) : "ERR" })
-          ])
-        ]));
+        var infoDiv = h("div", { className: "ep-info" }, [
+          h("div", { className: "ep-line" }, [
+            h("span", { className: "method-badge " + r.item.method.toLowerCase(), text: r.item.method }),
+            h("span", { className: "ep-url", title: r.url, text: r.item.ep })
+          ]),
+          h("span", { className: "ep-desc", text: r.item.desc })
+        ]);
+
+        var metricsDiv = h("div", { className: "ep-metrics" }, [
+          h("span", { className: "muted", text: r.bytes + " B" }),
+          h("span", { className: "muted", text: r.ms + " ms" }),
+          h("span", { className: "tag " + (r.ok ? "ok" : "err"), text: r.status ? ("HTTP " + r.status) : "ERR" })
+        ]);
+
+        var execBtn = h("button", {
+          className: "btn sm " + (r.item.method === "POST" ? "go" : ""),
+          type: "button",
+          text: r.item.method === "POST" ? "⚡ Execute" : "↻ Probe",
+          onClick: function () {
+            if (r.item.cmd) {
+              executeCalibratedCommand(r.item.cmd);
+            } else {
+              var t1 = performance.now();
+              fetch(r.item.ep, { headers: { Accept: "application/json" } }).then(function (res) {
+                return res.text().then(function (txt) {
+                  var ms1 = Math.round(performance.now() - t1);
+                  toast("Probed " + r.item.ep + " (" + res.status + " in " + ms1 + " ms)");
+                  var out = $("cmd-console-output");
+                  if (out) out.textContent = "[" + new Date().toISOString() + "] PROBE " + r.item.ep + " (HTTP " + res.status + ", " + ms1 + " ms):\n" + txt.slice(0, 2000);
+                  runEndpointProbe();
+                });
+              }).catch(function (err) {
+                toast("Probe failed: " + err.message);
+              });
+            }
+          }
+        });
+
+        box.appendChild(h("div", { className: "ep-row" }, [infoDiv, metricsDiv, execBtn]));
       });
+
       if (summaryTag) {
-        summaryTag.textContent = okCount + "/" + results.length + " HTTP 200 OK";
+        summaryTag.textContent = okCount + "/" + results.length + " Endpoints Calibrated OK";
         summaryTag.className = "tag " + (okCount === results.length ? "ok" : "warn");
       }
     });
