@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0",
+  "exported_at": "2026-10-17T12:14:15.416403+00:00",
+  "errors": {
+    "reconciliation": "FileNotFoundError",
+    "quarantine": "FileNotFoundError",
+    "risk_profiles": "FileNotFoundError"
+  },
+  "ledger": {
+    "status": "ok",
+    "jobs": [
+      {
+        "job_id": "job-strict-01",
+        "job_type": "reconciliation",
+        "state": "completed",
+        "attempt_count": "1",
+        "created_at": "2026-10-17T11:10:44.003102+00:00",
+        "updated_at": "2026-10-17T11:10:44.052430+00:00"
+      },
+      {
+        "job_id": "job-dryrun-999",
+        "job_type": "reconciliation",
+        "state": "completed",
+        "attempt_count": "1",
+        "created_at": "2026-10-17T10:20:54.717594",
+        "updated_at": "2026-10-17T10:20:54.772527"
+      },
+      {
+        "job_id": "job-live-02",
+        "job_type": "reconciliation",
+        "state": "completed",
+        "attempt_count": "1",
+        "created_at": "2026-10-17T10:08:23.808477",
+        "updated_at": "2026-10-17T10:08:24.341827"
+      },
+      {
+        "job_id": "job-daemon-01",
+        "job_type": "risk_extraction",
+        "state": "completed",
+        "attempt_count": "1",
+        "created_at": "2026-10-17T09:53:30.323881",
+        "updated_at": "2026-10-17T09:53:30.856090"
+      }
+    ],
+    "counts": {
+      "completed": "4"
+    },
+    "event_capture": true
+  },
+  "events": [
+    {
+      "event_id": "offline:initial:job-daemon-01",
+      "reference": "0eeeb9d284040fff",
+      "kind": "initial_observation",
+      "state": "completed",
+      "recorded_at": "2026-10-17T11:29:09.870Z"
+    },
+    {
+      "event_id": "offline:initial:job-live-02",
+      "reference": "8a71b2d503bbee4c",
+      "kind": "initial_observation",
+      "state": "completed",
+      "recorded_at": "2026-10-17T11:29:09.870Z"
+    },
+    {
+      "event_id": "offline:initial:job-dryrun-999",
+      "reference": "bb7681b454cf1c7c",
+      "kind": "initial_observation",
+      "state": "completed",
+      "recorded_at": "2026-10-17T11:29:09.870Z"
+    },
+    {
+      "event_id": "offline:initial:job-strict-01",
+      "reference": "d90a777c4b487eab",
+      "kind": "initial_observation",
+      "state": "completed",
+      "recorded_at": "2026-10-17T11:29:09.870Z"
+    }
+  ],
+  "hermes": {
+    "timestamp_utc": "2026-10-17T11:10:53.439383+00:00",
+    "endpoint": "http://localhost:8080/v1/chat/completions",
+    "model": "hermes-2-pro",
+    "max_tokens": 4096,
+    "max_retries": 1,
+    "allow_simulation": true,
+    "execution_mode": "simulated_fallback",
+    "is_simulated": true,
+    "status": "validated_simulation",
+    "attempts": [
+      {
+        "attempt": 1,
+        "execution_mode": "simulated_fallback",
+        "latency_ms": "4095.5",
+        "estimated_tokens": 45,
+        "outcome": "validated_simulation",
+        "error": "Hermes unreachable ([WinError 10061] No connection could be made because the target machine actively refused it); used explicit simulation."
+      }
+    ],
+    "data": {
+      "type": "batch_export_failure",
+      "description": "SIMULATED: Column mismatch in CSV header",
+      "reported_events": 2,
+      "period": "Q1",
+      "impact_hours_per_event": null,
+      "evidence_ids": [
+        "ev-sim-99"
+      ]
+    }
+  },
+  "reconciliation": null,
+  "quarantine": null,
+  "risk_profiles": null
+}

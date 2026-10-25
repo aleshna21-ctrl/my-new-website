@@ -27,7 +27,8 @@ yarn-error.log*
 
 # Application State, Logs & Runtime
 state/
-inbox/
+inbox/*
+!inbox/offline_snapshot.json
 *.log
 *.pid
 *.lock
