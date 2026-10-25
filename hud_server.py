@@ -1271,21 +1271,24 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
 
             elif self.path == "/api/gateway/crons":
                 action = body.get("action", "update")
-                cron_id = body.get("id") or body.get("cron_id")
-                if action == "trigger":
-                    dispatch_remote = bool(body.get("remote", False))
-                    if dispatch_remote:
-                        res = send_signed_rpc("http://127.0.0.1:8080/gateway/v1/rpc", "hermes.cron.trigger", {"id": cron_id})
-                        self._send_json(res)
+                cron_id = body.get("id") or body.get("cron_id") or body.get("job_id")
+                try:
+                    if action == "trigger":
+                        dispatch_remote = bool(body.get("remote", False))
+                        if dispatch_remote:
+                            res = send_signed_rpc("http://127.0.0.1:8080/gateway/v1/rpc", "hermes.cron.trigger", {"id": cron_id})
+                            self._send_json(res)
+                        else:
+                            outcome = trigger_cron_job(cron_id)
+                            self._send_json({"status": "ok", "triggered": outcome})
+                    elif action == "delete":
+                        del_ok = delete_cron_job(cron_id)
+                        self._send_json({"status": "ok" if del_ok else "not_found", "deleted": del_ok})
                     else:
-                        outcome = trigger_cron_job(cron_id)
-                        self._send_json({"status": "ok", "triggered": outcome})
-                elif action == "delete":
-                    del_ok = delete_cron_job(cron_id)
-                    self._send_json({"status": "ok" if del_ok else "not_found", "deleted": del_ok})
-                else:
-                    upd = update_cron_job(cron_id, body)
-                    self._send_json({"status": "ok", "cron": upd})
+                        upd = update_cron_job(cron_id, body)
+                        self._send_json({"status": "ok", "cron": upd})
+                except Exception as err:
+                    self._send_json({"error": str(err), "status": "error"}, 400)
                 return
 
             elif self.path == "/api/gateway/board/sync":

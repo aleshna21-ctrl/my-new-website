@@ -23,8 +23,8 @@
       "command": "audit_invariants"
     },
     "enabled": true,
-    "last_run_utc": null,
-    "last_outcome": "pending",
+    "last_run_utc": "2026-10-25T23:09:14.011728+00:00",
+    "last_outcome": "success: Executed",
     "created_at": "2026-10-23T00:00:00Z"
   },
   {
