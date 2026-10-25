@@ -210,9 +210,11 @@
     var cal = $("drawer-calendar");
     var trk = $("drawer-tracker");
     var quar = $("drawer-quarantine");
+    var gw = $("drawer-gateway");
     if (cal) cal.setAttribute("hidden", "");
     if (trk) trk.setAttribute("hidden", "");
     if (quar) quar.setAttribute("hidden", "");
+    if (gw) gw.setAttribute("hidden", "");
     if (scrim) scrim.removeAttribute("hidden");
     if (drawerName === "calendar" && cal) {
       cal.removeAttribute("hidden");
@@ -221,6 +223,9 @@
     } else if (drawerName === "quarantine" && quar) {
       quar.removeAttribute("hidden");
       loadQuarantineDrawer();
+    } else if (drawerName === "gateway" && gw) {
+      gw.removeAttribute("hidden");
+      loadGatewayDrawer();
     }
   }
 
@@ -229,10 +234,12 @@
     var cal = $("drawer-calendar");
     var trk = $("drawer-tracker");
     var quar = $("drawer-quarantine");
+    var gw = $("drawer-gateway");
     if (scrim) scrim.setAttribute("hidden", "");
     if (cal) cal.setAttribute("hidden", "");
     if (trk) trk.setAttribute("hidden", "");
     if (quar) quar.setAttribute("hidden", "");
+    if (gw) gw.setAttribute("hidden", "");
   }
 
   function wireNavigation() {
@@ -984,12 +991,20 @@
     setBadge("badge-inbox", counters.inbox || 0);
     setBadge("badge-outbox", (counters.outbox_review || 0) + (counters.notify_pending || 0));
     setBadge("badge-quarantine", counters.quarantine || 0);
+    setBadge("badge-gateway", counters.gateway_crons || 0);
     setBadge("badge-alerts", counters.alerts_urgent || 0);
 
     var qTrig = $("trig-quar-meta");
     if (qTrig) {
       qTrig.textContent = (counters.quarantine || 0) > 0 ? (counters.quarantine + " hold") : "clean";
       qTrig.className = "tag " + ((counters.quarantine || 0) > 0 ? "warn" : "ok");
+    }
+
+    var gwTrig = $("trig-gw-meta");
+    if (gwTrig) {
+      var isGwOn = Boolean(counters.gateway_online);
+      gwTrig.textContent = isGwOn ? "ONLINE" : "STANDBY";
+      gwTrig.className = "tag " + (isGwOn ? "ok" : "warn");
     }
   }
 
@@ -1042,6 +1057,7 @@
     if (t === "calendar") openDrawer("calendar");
     else if (t === "today") openDrawer("tracker");
     else if (t === "quarantine") openDrawer("quarantine");
+    else if (t === "gateway") openDrawer("gateway");
     else if (t === "outbox") openSheet("outbox");
     else if (t === "inbox") openSheet("inbox");
     else if (t === "flow") goToView(1);
@@ -1240,6 +1256,12 @@
         sbActions.appendChild(h("button", {
           className: "btn go sm",
           type: "button",
+          text: "⚡ Open Gateway",
+          onClick: function () { openDrawer("gateway"); }
+        }));
+        sbActions.appendChild(h("button", {
+          className: "btn sm",
+          type: "button",
           text: "⚡ Run Hermes Probe",
           onClick: function () { executeCalibratedCommand("probe-8080"); }
         }));
@@ -1327,7 +1349,9 @@
 
     var v2Actions = h("div", { className: "node-actions-bar" });
     if (nodeId === "hermes") {
-      v2Actions.appendChild(h("button", { className: "btn go sm", type: "button", text: "⚡ Run Hermes 8080 Probe", onClick: function () { executeCalibratedCommand("probe-8080"); } }));
+      v2Actions.appendChild(h("button", { className: "btn go sm", type: "button", text: "⚡ Open Gateway", onClick: function () { openDrawer("gateway"); } }));
+      v2Actions.appendChild(h("button", { className: "btn sm", type: "button", text: "⚡ Run Hermes 8080 Probe", onClick: function () { executeCalibratedCommand("probe-8080"); } }));
+      v2Actions.appendChild(h("button", { className: "btn sm", type: "button", text: "↻ Sync Board Tasks", onClick: function () { executeCalibratedCommand("sync-board-tasks"); } }));
     } else if (nodeId === "quarantine") {
       v2Actions.appendChild(h("button", { className: "btn warn sm", type: "button", text: "⚠️ Open Quarantine Drawer", onClick: function () { openDrawer("quarantine"); } }));
       v2Actions.appendChild(h("button", { className: "btn go sm", type: "button", text: "⚡ Auto-Recover All Rows", onClick: function () { autoRecoverAllQuarantine(); } }));
@@ -2123,6 +2147,14 @@
           logOut("POST /api/guardrail/bash (L6 Pre-Execution Screen: " + cmdStr + ")", res);
         })
         .catch(function (err) { logOut("POST /api/guardrail/bash", err.message, true); });
+    } else if (cmd === "sync-board-tasks") {
+      api("/api/gateway/tasks", { method: "POST", body: { command: "sync_board_tasks" } })
+        .then(function (res) { logOut("POST /api/gateway/tasks (Sync Board Tasks)", res); })
+        .catch(function (err) { logOut("POST /api/gateway/tasks", err.message, true); });
+    } else if (cmd === "audit-invariants") {
+      api("/api/gateway/tasks", { method: "POST", body: { command: "audit_invariants" } })
+        .then(function (res) { logOut("POST /api/gateway/tasks (Audit Invariants)", res); })
+        .catch(function (err) { logOut("POST /api/gateway/tasks", err.message, true); });
     }
   }
 
@@ -2881,6 +2913,435 @@
     }
   }
 
+  // ==================== GATEWAY DRAWER (AIOS <-> HERMES HMAC GATEWAY) ====================
+  var CURRENT_GW_TAB = "tasks";
+
+  function switchGatewayTab(tab) {
+    CURRENT_GW_TAB = tab;
+    var tabBtns = document.querySelectorAll(".gw-tab-btn");
+    tabBtns.forEach(function (b) {
+      b.classList.toggle("active", b.getAttribute("data-gw-tab") === tab);
+    });
+
+    var pTasks = $("gw-panel-tasks");
+    var pBoard = $("gw-panel-board");
+    var pCrons = $("gw-panel-crons");
+    if (pTasks) { if (tab === "tasks") pTasks.removeAttribute("hidden"); else pTasks.setAttribute("hidden", ""); }
+    if (pBoard) { if (tab === "board") pBoard.removeAttribute("hidden"); else pBoard.setAttribute("hidden", ""); }
+    if (pCrons) { if (tab === "crons") pCrons.removeAttribute("hidden"); else pCrons.setAttribute("hidden", ""); }
+
+    if (tab === "tasks") loadGatewayTasks();
+    else if (tab === "board") loadGatewayBoard();
+    else if (tab === "crons") loadGatewayCrons();
+  }
+
+  function loadGatewayDrawer() {
+    switchGatewayTab(CURRENT_GW_TAB);
+  }
+
+  function loadGatewayTasks() {
+    var countEl = $("gw-tasks-count");
+    var tbody = $("gw-tasks-tbody");
+    if (countEl) countEl.textContent = "Loading tasks...";
+
+    api("/api/gateway/tasks").then(function (res) {
+      if (!res || !Array.isArray(res.tasks)) {
+        if (countEl) countEl.textContent = "0 tasks recorded";
+        return;
+      }
+      if (countEl) countEl.textContent = res.tasks.length + " tasks recorded";
+      renderGatewayTasks(res.tasks);
+    }).catch(function (err) {
+      if (countEl) countEl.textContent = "Error loading tasks: " + err.message;
+    });
+  }
+
+  function renderGatewayTasks(tasks) {
+    var tbody = $("gw-tasks-tbody");
+    if (!tbody) return;
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+    if (tasks.length === 0) {
+      var emptyTr = document.createElement("tr");
+      var emptyTd = document.createElement("td");
+      emptyTd.colSpan = 6;
+      emptyTd.className = "muted mono";
+      emptyTd.textContent = "No tasks dispatched yet. Use the form above to dispatch a command.";
+      emptyTr.appendChild(emptyTd);
+      tbody.appendChild(emptyTr);
+      return;
+    }
+
+    tasks.forEach(function (task) {
+      var tr = document.createElement("tr");
+
+      var tdId = document.createElement("td");
+      tdId.className = "mono bold sm-txt";
+      tdId.textContent = task.task_id || "task-unknown";
+
+      var tdCmd = document.createElement("td");
+      tdCmd.className = "mono";
+      tdCmd.textContent = task.command || "n/a";
+
+      var tdStatus = document.createElement("td");
+      var stSpan = document.createElement("span");
+      var isOk = task.status === "completed" || task.status === "ok";
+      stSpan.className = "tag " + (isOk ? "ok" : "warn");
+      stSpan.textContent = task.status || "unknown";
+      tdStatus.appendChild(stSpan);
+
+      var tdDur = document.createElement("td");
+      tdDur.className = "mono sm-txt";
+      var durMs = task.duration_ms != null ? String(task.duration_ms) + " ms" : "—";
+      tdDur.textContent = durMs;
+
+      var tdTime = document.createElement("td");
+      tdTime.className = "mono sm-txt muted";
+      tdTime.textContent = (task.created_at_utc || "").replace("T", " ").slice(0, 19);
+
+      var tdOut = document.createElement("td");
+      tdOut.className = "mono sm-txt";
+      var outSummary = "";
+      if (task.error) {
+        outSummary = "ERR: " + task.error;
+      } else if (task.result) {
+        outSummary = typeof task.result === "string" ? task.result : JSON.stringify(task.result);
+        if (outSummary.length > 55) outSummary = outSummary.slice(0, 52) + "...";
+      } else {
+        outSummary = "Dispatched";
+      }
+      tdOut.textContent = outSummary;
+
+      tr.appendChild(tdId);
+      tr.appendChild(tdCmd);
+      tr.appendChild(tdStatus);
+      tr.appendChild(tdDur);
+      tr.appendChild(tdTime);
+      tr.appendChild(tdOut);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function loadGatewayBoard() {
+    var syncMsg = $("gw-board-sync-msg");
+    if (syncMsg) syncMsg.textContent = "Checking board synchronization...";
+
+    api("/api/os/board").then(function (res) {
+      if (!res || !Array.isArray(res.tasks)) return;
+      var total = res.tasks.length;
+      var active = res.tasks.filter(function (t) { return t.column === "todo" || t.column === "doing"; }).length;
+      var vital = res.tasks.filter(function (t) { return t.priority === "P1" || t.vital; }).length;
+      var rev = res.revision != null ? String(res.revision) : "1";
+
+      var sTot = $("gw-stat-total");
+      var sAct = $("gw-stat-active");
+      var sVit = $("gw-stat-vital");
+      var sRev = $("gw-stat-rev");
+      if (sTot) sTot.textContent = String(total);
+      if (sAct) sAct.textContent = String(active);
+      if (sVit) sVit.textContent = String(vital);
+      if (sRev) sRev.textContent = rev;
+
+      if (syncMsg) syncMsg.textContent = "Synced with AIOS board rev " + rev + " (" + total + " tasks)";
+      renderGatewayBoardTable(res.tasks);
+    }).catch(function (err) {
+      if (syncMsg) syncMsg.textContent = "Board fetch failed: " + err.message;
+    });
+  }
+
+  function renderGatewayBoardTable(tasks) {
+    var tbody = $("gw-board-tbody");
+    if (!tbody) return;
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+    tasks.forEach(function (t) {
+      var tr = document.createElement("tr");
+
+      var tdPri = document.createElement("td");
+      var priSpan = document.createElement("span");
+      var priCls = t.priority === "P1" ? "warn" : (t.priority === "P2" ? "info" : "");
+      priSpan.className = "chip-badge " + priCls;
+      priSpan.textContent = t.priority || "P3";
+      tdPri.appendChild(priSpan);
+
+      var tdTitle = document.createElement("td");
+      tdTitle.className = "bold";
+      tdTitle.textContent = t.title || "Untitled";
+
+      var tdCol = document.createElement("td");
+      var colSpan = document.createElement("span");
+      colSpan.className = "tag " + (t.column === "done" ? "ok" : "info");
+      colSpan.textContent = (t.column || "todo").toUpperCase();
+      tdCol.appendChild(colSpan);
+
+      var tdDue = document.createElement("td");
+      tdDue.className = "mono sm-txt muted";
+      tdDue.textContent = t.due || "—";
+
+      var tdAct = document.createElement("td");
+      var btnSync = document.createElement("button");
+      btnSync.type = "button";
+      btnSync.className = "btn sm ghost";
+      btnSync.textContent = "⚡ Sync";
+      btnSync.addEventListener("click", function () {
+        api("/api/gateway/board/sync", {
+          method: "POST",
+          body: { task_id: t.id }
+        }).then(function (res) {
+          toast("Task " + t.id + " synced to Hermes!");
+        }).catch(function (err) {
+          toast("Sync error: " + err.message);
+        });
+      });
+      tdAct.appendChild(btnSync);
+
+      tr.appendChild(tdPri);
+      tr.appendChild(tdTitle);
+      tr.appendChild(tdCol);
+      tr.appendChild(tdDue);
+      tr.appendChild(tdAct);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function loadGatewayCrons() {
+    var msgEl = $("gw-crons-msg");
+    if (msgEl) msgEl.textContent = "Loading active cron schedules...";
+
+    api("/api/gateway/crons").then(function (res) {
+      if (!res || !Array.isArray(res.crons)) {
+        if (msgEl) msgEl.textContent = "No cron schedules configured.";
+        return;
+      }
+      if (msgEl) msgEl.textContent = res.crons.length + " active schedules registered with gateway daemon.";
+      renderGatewayCrons(res.crons);
+    }).catch(function (err) {
+      if (msgEl) msgEl.textContent = "Cron fetch error: " + err.message;
+    });
+  }
+
+  function renderGatewayCrons(crons) {
+    var tbody = $("gw-crons-tbody");
+    if (!tbody) return;
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+    crons.forEach(function (c) {
+      var tr = document.createElement("tr");
+
+      var tdName = document.createElement("td");
+      var nameDiv = document.createElement("div");
+      nameDiv.className = "bold";
+      nameDiv.textContent = c.name || c.id;
+      var descDiv = document.createElement("div");
+      descDiv.className = "sm-txt muted";
+      descDiv.textContent = c.description || c.rpc_method;
+      tdName.appendChild(nameDiv);
+      tdName.appendChild(descDiv);
+
+      var tdExpr = document.createElement("td");
+      tdExpr.className = "mono bold";
+      tdExpr.textContent = c.cron_expression || "—";
+
+      var tdLast = document.createElement("td");
+      tdLast.className = "mono sm-txt muted";
+      tdLast.textContent = c.last_run_utc ? c.last_run_utc.replace("T", " ").slice(0, 19) : "Never";
+
+      var tdOut = document.createElement("td");
+      var outSpan = document.createElement("span");
+      var isSuccess = c.last_outcome === "success" || c.last_outcome === "ok";
+      outSpan.className = "tag " + (isSuccess ? "ok" : (c.last_outcome ? "warn" : "info"));
+      outSpan.textContent = c.last_outcome || "pending";
+      tdOut.appendChild(outSpan);
+
+      var tdAct = document.createElement("td");
+      var trigBtn = document.createElement("button");
+      trigBtn.type = "button";
+      trigBtn.className = "btn sm go";
+      trigBtn.textContent = "▶ Run Now";
+      trigBtn.addEventListener("click", function () {
+        trigBtn.textContent = "Running...";
+        api("/api/gateway/crons", {
+          method: "POST",
+          body: { action: "trigger", job_id: c.id }
+        }).then(function (res) {
+          toast("Cron triggered: " + c.name);
+          loadGatewayCrons();
+        }).catch(function (err) {
+          toast("Cron trigger error: " + err.message);
+          trigBtn.textContent = "▶ Run Now";
+        });
+      });
+
+      var delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn sm ghost";
+      delBtn.textContent = "✕";
+      delBtn.addEventListener("click", function () {
+        if (!confirm("Delete cron schedule " + c.name + "?")) return;
+        api("/api/gateway/crons", {
+          method: "POST",
+          body: { action: "delete", job_id: c.id }
+        }).then(function () {
+          toast("Cron deleted.");
+          loadGatewayCrons();
+        }).catch(function (err) {
+          toast("Delete failed: " + err.message);
+        });
+      });
+
+      tdAct.appendChild(trigBtn);
+      tdAct.appendChild(delBtn);
+
+      tr.appendChild(tdName);
+      tr.appendChild(tdExpr);
+      tr.appendChild(tdLast);
+      tr.appendChild(tdOut);
+      tr.appendChild(tdAct);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function wireGatewayDrawer() {
+    // Header Gateway trigger
+    var trigGw = $("trig-gateway");
+    if (trigGw) {
+      trigGw.addEventListener("click", function () {
+        openDrawer("gateway");
+      });
+    }
+
+    // Tab buttons
+    var tabBtns = document.querySelectorAll(".gw-tab-btn");
+    tabBtns.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var tab = btn.getAttribute("data-gw-tab");
+        if (tab) switchGatewayTab(tab);
+      });
+    });
+
+    // Task Dispatch Form
+    var taskForm = $("gw-task-form");
+    if (taskForm) {
+      taskForm.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var cmd = ($("gw-task-cmd") ? $("gw-task-cmd").value : "ping");
+        var remote = $("gw-task-remote") ? $("gw-task-remote").value === "true" : true;
+        var prompt = $("gw-task-prompt") ? $("gw-task-prompt").value.trim() : "";
+        var btn = $("gw-btn-dispatch");
+        var stat = $("gw-dispatch-status");
+        if (btn) btn.textContent = "Dispatching...";
+        if (stat) stat.textContent = "Executing via HMAC gateway...";
+
+        api("/api/gateway/tasks", {
+          method: "POST",
+          body: {
+            command: cmd,
+            remote: remote,
+            prompt: prompt
+          }
+        }).then(function (res) {
+          if (btn) btn.textContent = "▶ Dispatch Task Command";
+          if (stat) stat.textContent = res.status === "completed" ? "Execution Succeeded" : "Completed";
+          toast("Task " + (res.task_id || "") + " executed: " + res.status);
+          loadGatewayTasks();
+        }).catch(function (err) {
+          if (btn) btn.textContent = "▶ Dispatch Task Command";
+          if (stat) stat.textContent = "Execution Failed";
+          toast("Dispatch error: " + err.message);
+        });
+      });
+    }
+
+    // Board Sync Buttons
+    var btnSyncBoard = $("gw-btn-sync-board");
+    if (btnSyncBoard) {
+      btnSyncBoard.addEventListener("click", function () {
+        btnSyncBoard.textContent = "Syncing...";
+        api("/api/gateway/board/sync", {
+          method: "POST",
+          body: { sync_all: true }
+        }).then(function (res) {
+          btnSyncBoard.textContent = "⚡ Sync Board with Hermes";
+          toast("Kanban board synchronized with Hermes!");
+          loadGatewayBoard();
+        }).catch(function (err) {
+          btnSyncBoard.textContent = "⚡ Sync Board with Hermes";
+          toast("Sync error: " + err.message);
+        });
+      });
+    }
+
+    var btnPushVital = $("gw-btn-push-vital");
+    if (btnPushVital) {
+      btnPushVital.addEventListener("click", function () {
+        btnPushVital.textContent = "Pushing...";
+        api("/api/gateway/board/sync", {
+          method: "POST",
+          body: { sync_vital_only: true }
+        }).then(function (res) {
+          btnPushVital.textContent = "⚡ Push Vital Tasks to Hermes";
+          toast("Vital tasks pushed to Hermes!");
+          loadGatewayBoard();
+        }).catch(function (err) {
+          btnPushVital.textContent = "⚡ Push Vital Tasks to Hermes";
+          toast("Push error: " + err.message);
+        });
+      });
+    }
+
+    // Add Cron Toggle
+    var btnAddCronToggle = $("gw-btn-add-cron-toggle");
+    var cronCard = $("gw-cron-edit-card");
+    if (btnAddCronToggle && cronCard) {
+      btnAddCronToggle.addEventListener("click", function () {
+        if (cronCard.hasAttribute("hidden")) {
+          cronCard.removeAttribute("hidden");
+          if ($("gw-cron-name")) $("gw-cron-name").focus();
+        } else {
+          cronCard.setAttribute("hidden", "");
+        }
+      });
+    }
+
+    var btnCronCancel = $("gw-cron-form-cancel");
+    if (btnCronCancel && cronCard) {
+      btnCronCancel.addEventListener("click", function () {
+        cronCard.setAttribute("hidden", "");
+      });
+    }
+
+    // Cron Form Submit
+    var cronForm = $("gw-cron-form");
+    if (cronForm) {
+      cronForm.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var cId = $("gw-cron-id") ? $("gw-cron-id").value.trim() : "";
+        var cName = $("gw-cron-name") ? $("gw-cron-name").value.trim() : "";
+        var cExpr = $("gw-cron-expr") ? $("gw-cron-expr").value.trim() : "";
+        var cMethod = $("gw-cron-method") ? $("gw-cron-method").value : "hermes.task.execute";
+        var cDesc = $("gw-cron-desc") ? $("gw-cron-desc").value.trim() : "";
+
+        api("/api/gateway/crons", {
+          method: "POST",
+          body: {
+            action: "update",
+            job_id: cId || undefined,
+            name: cName,
+            cron_expression: cExpr,
+            rpc_method: cMethod,
+            description: cDesc
+          }
+        }).then(function (res) {
+          toast("Cron schedule saved!");
+          if (cronCard) cronCard.setAttribute("hidden", "");
+          loadGatewayCrons();
+        }).catch(function (err) {
+          toast("Save error: " + err.message);
+        });
+      });
+    }
+  }
+
   // ==================== BOOTSTRAP ====================
   document.addEventListener("DOMContentLoaded", function () {
     wireNavigation();
@@ -2888,6 +3349,7 @@
     wireObsidianWidget();
     wireSystemsView();
     wireQuarantineDrawer();
+    wireGatewayDrawer();
     updateClock();
     setInterval(updateClock, 1000);
     loadBoard();
@@ -2895,3 +3357,4 @@
     connectTelemetryStream();
   });
 })();
+

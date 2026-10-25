@@ -448,6 +448,40 @@ def get_alerts_status() -> dict:
         "dispatch_logs": logs[-5:][::-1]
     }
 
+def get_gateway_status() -> dict:
+    from hud.gateway import load_cron_registry, load_task_history, GLOBAL_NONCE_CACHE
+    import urllib.request
+    hermes_online = False
+    hermes_svc = None
+    try:
+        req = urllib.request.Request("http://127.0.0.1:8080/gateway/v1/health")
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=1.2) as resp:
+            if resp.status == 200:
+                h_data = json.loads(resp.read().decode("utf-8"))
+                hermes_online = True
+                hermes_svc = h_data.get("service")
+    except Exception:
+        hermes_online = False
+
+    crons = load_cron_registry()
+    tasks = load_task_history()
+    return {
+        "status": "ok",
+        "service": "aios-gateway-host",
+        "protocol": "JSON-RPC 2.0 / REST Webhook",
+        "auth_method": "HMAC-SHA256 (Anti-Replay Nonce + Timestamp)",
+        "hermes_online": hermes_online,
+        "hermes_service": hermes_svc or "hermes-8080",
+        "endpoint_hermes": "http://127.0.0.1:8080/gateway/v1/rpc",
+        "endpoint_aios": "http://127.0.0.1:5050/api/gateway/hermes",
+        "crons_total": len(crons),
+        "crons_enabled": sum(1 for c in crons if c.get("enabled")),
+        "tasks_executed": len(tasks),
+        "recent_tasks": tasks[-5:][::-1],
+        "replay_cache_size": GLOBAL_NONCE_CACHE.size(),
+        "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    }
+
 # --------------------------------------------------------------------------- #
 # AI OS dashboard: telemetry frame + board helpers (logic lives in hud/os_dashboard.py)
 # --------------------------------------------------------------------------- #
@@ -522,6 +556,7 @@ def os_frame() -> dict:
         e2e_events=get_recent_e2e_events(1), board=board, plan=plan, stats=osd.static_stats(),
         mtimes=mtimes, now=now,
         server={"pid": os.getpid(), "build": BUILD_ID, "uptime_min": int((time.time() - SERVER_STARTED) // 60)},
+        gateway=get_gateway_status(),
     )
 
 
@@ -983,6 +1018,14 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
             self._send_json(get_recent_e2e_events())
         elif self.path == "/api/session":
             self._send_json({"token": "local-session-token", "authenticated": True})
+        elif self.path == "/api/gateway/status":
+            self._send_json(get_gateway_status())
+        elif self.path == "/api/gateway/crons":
+            from hud.gateway import load_cron_registry
+            self._send_json({"status": "ok", "crons": load_cron_registry()})
+        elif self.path == "/api/gateway/tasks":
+            from hud.gateway import load_task_history
+            self._send_json({"status": "ok", "tasks": load_task_history()})
         elif self.path == "/api/hud":
             self._send_json({
                 "hermes": get_hermes_telemetry(),
@@ -1013,7 +1056,8 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
             if not 0 <= length <= limit:
                 self._send_json({"error": "Request body is too large."}, 413)
                 return
-            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+            raw_body = self.rfile.read(length) if length else b"{}"
+            body = json.loads(raw_body.decode("utf-8")) if length else {}
             if not isinstance(body, dict):
                 raise ValueError("Request body must be a JSON object.")
         except (ValueError, UnicodeError) as exc:
@@ -1178,6 +1222,84 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                 invoice_fixture=str(body.get("invoice_fixture", "adversarial_fixture.csv")),
                 stage_to_outbox=bool(body.get("stage_to_outbox", True)),
             ))
+        elif self.path.startswith("/api/gateway/"):
+            from hud.gateway import (
+                verify_gateway_request, GatewayAuthError,
+                execute_gateway_rpc, execute_task_command,
+                load_cron_registry, update_cron_job, trigger_cron_job, delete_cron_job,
+                send_signed_rpc
+            )
+
+            # Inbound Hermes Webhook / RPC Callback requires strict signature verification
+            if self.path == "/api/gateway/hermes":
+                try:
+                    verify_gateway_request(dict(self.headers), "POST", self.path, raw_body)
+                except GatewayAuthError as gae:
+                    self._send_json({
+                        "jsonrpc": "2.0",
+                        "error": {"code": -32000, "message": f"Unauthorized: {gae}"},
+                        "status": "unauthorized"
+                    }, 401)
+                    return
+                method = body.get("method", "")
+                params = body.get("params", {})
+                req_id = body.get("id")
+                rpc_res = execute_gateway_rpc(method, params)
+                out = {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": rpc_res.get("result"),
+                    "error": rpc_res.get("error"),
+                    "status": "error" if rpc_res.get("error") else "ok"
+                }
+                status_code = 400 if rpc_res.get("error") else 200
+                self._send_json(out, status_code)
+                return
+
+            elif self.path == "/api/gateway/tasks":
+                cmd = body.get("command") or body.get("cmd", "ping")
+                params = body.get("params", body)
+                dispatch_remote = bool(body.get("remote", False))
+
+                if dispatch_remote:
+                    res = send_signed_rpc("http://127.0.0.1:8080/gateway/v1/rpc", "hermes.task.execute", {"command": cmd, **params})
+                    self._send_json(res)
+                else:
+                    task_res = execute_task_command(cmd, params)
+                    self._send_json({"status": "ok", "task": task_res})
+                return
+
+            elif self.path == "/api/gateway/crons":
+                action = body.get("action", "update")
+                cron_id = body.get("id") or body.get("cron_id")
+                if action == "trigger":
+                    dispatch_remote = bool(body.get("remote", False))
+                    if dispatch_remote:
+                        res = send_signed_rpc("http://127.0.0.1:8080/gateway/v1/rpc", "hermes.cron.trigger", {"id": cron_id})
+                        self._send_json(res)
+                    else:
+                        outcome = trigger_cron_job(cron_id)
+                        self._send_json({"status": "ok", "triggered": outcome})
+                elif action == "delete":
+                    del_ok = delete_cron_job(cron_id)
+                    self._send_json({"status": "ok" if del_ok else "not_found", "deleted": del_ok})
+                else:
+                    upd = update_cron_job(cron_id, body)
+                    self._send_json({"status": "ok", "cron": upd})
+                return
+
+            elif self.path == "/api/gateway/board/sync":
+                dispatch_remote = bool(body.get("remote", False))
+                if dispatch_remote:
+                    res = send_signed_rpc("http://127.0.0.1:8080/gateway/v1/rpc", "hermes.board.sync", body)
+                    self._send_json(res)
+                else:
+                    rpc_res = execute_gateway_rpc("hermes.board.sync", body)
+                    self._send_json(rpc_res.get("result", rpc_res))
+                return
+
+            self._send_json({"error": "Unknown gateway endpoint"}, 404)
+            return
         else:
             self._send_json({"error": "Unknown endpoint"}, 404)
 

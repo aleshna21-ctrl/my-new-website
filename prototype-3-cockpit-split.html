@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototype III — Executive Dual-Core Synchronized Cockpit [RECOMMENDED]</title>
+<script src="./static/jev-omnibus.js"></script>
+<style>
+  :root {
+    --bg: #07090e;
+    --card: #0e131f;
+    --card-2: #141c2e;
+    --border: #22304d;
+    --border-hover: #38bdf8;
+    --text: #f8fafc;
+    --muted: #94a3b8;
+    --cyan: #06b6d4;
+    --gold: #f59e0b;
+    --emerald: #10b981;
+    --crimson: #ef4444;
+    --violet: #8b5cf6;
+    --mono: ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, monospace;
+    --sans: 'Segoe UI', Inter, -apple-system, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Prototype Switcher Ribbon */
+  .proto-bar {
+    background: #030508;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .proto-links { display: flex; gap: 8px; align-items: center; }
+  .proto-link {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    transition: all 0.15s ease;
+  }
+  .proto-link:hover { color: #fff; border-color: var(--cyan); }
+  .proto-link.active {
+    color: var(--gold);
+    border-color: var(--gold);
+    background: rgba(245, 158, 11, 0.14);
+    font-weight: 700;
+  }
+
+  /* Cockpit Top Navigation */
+  header.cockpit-bar {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .mode-switcher { display: flex; gap: 6px; }
+  .mode-btn {
+    background: var(--card-2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 7px 13px;
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .mode-btn:hover { color: #fff; border-color: var(--cyan); }
+  .mode-btn.active {
+    background: rgba(6, 182, 212, 0.16);
+    color: #fff;
+    border-color: var(--cyan);
+  }
+
+  /* Dynamic Cockpit Grid */
+  .cockpit-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr 360px;
+    gap: 12px;
+    padding: 12px;
+    overflow: hidden;
+  }
+  .cockpit-grid.mode-agents-only { grid-template-columns: 1fr 380px; }
+  .cockpit-grid.mode-agents-only #col-obsidian { display: none; }
+  .cockpit-grid.mode-obsidian-only { grid-template-columns: 1fr 380px; }
+  .cockpit-grid.mode-obsidian-only #col-agents { display: none; }
+
+  .col-pane {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .pane-header {
+    padding: 10px 14px;
+    background: #090d16;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--cyan);
+  }
+  .pane-body {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .sub-card {
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 11px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .interactive-row {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .interactive-row:hover { border-color: var(--cyan); background: rgba(6, 182, 212, 0.05); }
+  .tag {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .tag.done { background: rgba(16,185,129,0.18); color: var(--emerald); border: 1px solid var(--emerald); }
+  .tag.ask { background: rgba(245,158,11,0.18); color: var(--gold); border: 1px solid var(--gold); }
+  .tag.unverified { background: rgba(6,182,212,0.18); color: var(--cyan); border: 1px solid var(--cyan); }
+  .tag.failed { background: rgba(239,68,68,0.18); color: var(--crimson); border: 1px solid var(--crimson); }
+
+  .btn-c {
+    background: var(--card-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-c:hover { border-color: var(--cyan); color: var(--cyan); }
+  .btn-c.go { border-color: var(--emerald); color: var(--emerald); }
+  .btn-c.go:hover { background: rgba(16,185,129,0.15); }
+  .btn-c.e2e-btn { border-color: var(--gold); color: var(--gold); font-weight: 700; }
+  .btn-c.e2e-btn:hover { background: rgba(245,158,11,0.15); }
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <div class="proto-links">
+    <strong style="color:var(--gold);">HUD PROTOTYPES //</strong>
+    <a class="proto-link" href="prototype-1-ring-command.html">Prototype I: Tactical Ring Command</a>
+    <a class="proto-link" href="prototype-2-minimal-3d.html">Prototype II: Spatial 3D Bento</a>
+    <a class="proto-link active" href="prototype-3-cockpit-split.html">Prototype III: Dual-Core Cockpit (Recommended)</a>
+    <a class="proto-link" href="os">AI OS Command Center (Full System)</a>
+  </div>
+  <div>
+    <span style="color:var(--gold);">★ RECOMMENDED EXECUTIVE COCKPIT: Synchronized Dual-Core (Workflow ↔ Second Brain)</span>
+  </div>
+</div>
+
+<header class="cockpit-bar">
+  <div style="display:flex; align-items:center; gap:14px;">
+    <strong style="font-family:var(--mono); font-size:14px; color:var(--gold);">⚡ JEV × SECOND BRAIN // SYNCHRONIZED COCKPIT</strong>
+    <div class="mode-switcher">
+      <button class="mode-btn" id="m3-btn-agents" onclick="setCockpitLayout('agents')">01 · WORKFLOWS &amp; DIODE ONLY</button>
+      <button class="mode-btn" id="m3-btn-obsidian" onclick="setCockpitLayout('obsidian')">02 · SECOND BRAIN 3D ONLY</button>
+      <button class="mode-btn active" id="m3-btn-split" onclick="setCockpitLayout('split')">03 · DUAL-CORE SYNCHRONIZED</button>
+    </div>
+  </div>
+  <div style="display:flex; gap:10px; align-items:center; font-family:var(--mono); font-size:11px;">
+    <button class="btn-c e2e-btn" id="btn-e2e" onclick="triggerE2EPipeline()">🚀 RUN E2E PIPELINE</button>
+    <button class="btn-c" id="btn-probe" onclick="triggerHermesProbe()">⚡ Probe Hermes</button>
+    <span>Risk: <strong style="color:var(--crimson);" id="c3-risk">$826,920.00</strong></span>
+    <span>Savings: <strong style="color:var(--emerald);" id="c3-save">$702,882.00</strong></span>
+    <button class="btn-c" onclick="c3Undo()">↩️ Undo (<span id="c3-undo-cnt">0</span>)</button>
+  </div>
+</header>
+
+<div class="cockpit-grid" id="cockpit-grid">
+
+  <!-- COLUMN 1: AGENTS, INBOX/OUTBOX DIODE & JEV RUNG WORKFLOWS -->
+  <section class="col-pane" id="col-agents">
+    <div class="pane-header">
+      <span>01 // AGENTS, DIODE INBOX/OUTBOX &amp; GATEWAY</span>
+      <span class="tag done">CLICK ROW → TRACES IN VAULT</span>
+    </div>
+    <div class="pane-body">
+      <!-- Inbound / Outbound Diode -->
+      <div class="sub-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:11px;">
+          <strong style="color:var(--gold);">📥 INBOX &amp; 📤 OUTBOX DIODE</strong>
+          <span class="tag unverified" id="c3-io-summary">LOADING...</span>
+        </div>
+        <div id="c3-io-combined" style="display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+
+      <!-- Capability Zones & Guardrails -->
+      <div class="sub-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:11px;">
+          <strong style="color:var(--cyan);">🛡️ 5 CAPABILITY ZONES &amp; LEVEL 1-10 GUARDRAILS</strong>
+          <span class="tag done">HMAC VERIFIED</span>
+        </div>
+        <div id="c3-agents-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COLUMN 2: OBSIDIAN CONCENTRIC RING & MINIMAL 3D VAULT -->
+  <section class="col-pane" id="col-obsidian">
+    <div class="pane-header">
+      <span>02 // OBSIDIAN SECOND BRAIN (4 RINGS · 28 NODES)</span>
+      <div style="display:flex; gap:4px;">
+        <button class="btn-c" onclick="c3Graph.setMode('ring2d')">◎ 2D Ring</button>
+        <button class="btn-c" onclick="c3Graph.setMode('orbital3d')">🪐 3D Orbit</button>
+        <button class="btn-c" onclick="c3Graph.setMode('sphere3d')">🌐 3D Sphere</button>
+      </div>
+    </div>
+    <div style="flex:1; position:relative; background:radial-gradient(circle at center, #111a2e 0%, #07090e 100%); min-height:300px;">
+      <canvas id="c3-canvas" style="width:100%; height:100%; display:block;"></canvas>
+    </div>
+    <div style="padding:10px 12px; border-top:1px solid var(--border); background:#090d16; font-family:var(--mono); font-size:11px;">
+      <div style="display:flex; justify-content:space-between;">
+        <strong style="color:var(--cyan);" id="c3-node-name">Jev Market Judgment</strong>
+        <span class="tag done" id="c3-node-ring">RING 2 · ACTIVE</span>
+      </div>
+      <div style="color:var(--muted); margin-top:4px; font-family:var(--sans); font-size:11.5px;" id="c3-node-desc">
+        Enforces 7 qualitative market judgment boundaries with zero sizing authority.
+      </div>
+    </div>
+  </section>
+
+  <!-- COLUMN 3: PERSISTENT OMNISCIENT AI ASSISTANT & TELEMETRY STREAM -->
+  <aside class="col-pane">
+    <div class="pane-header">
+      <span>03 // OMNISCIENT AI &amp; GATEWAY TELEMETRY</span>
+      <span class="tag done" id="c3-outcome">OUTCOME: DONE</span>
+    </div>
+    <div class="pane-body" id="c3-chat" style="font-family:var(--mono); font-size:11px;"></div>
+    <div style="padding:10px; border-top:1px solid var(--border); background:#090d16; display:flex; flex-direction:column; gap:6px;">
+      <div style="display:flex; gap:4px; flex-wrap:wrap;">
+        <button class="btn-c" onclick="c3Quick('Inspect Jev Market Judgment and JudgmentBoundary')">Market Judgment</button>
+        <button class="btn-c" onclick="c3Quick('Verify Zero-Loss Invariant Ledger')">Audit Invariant</button>
+        <button class="btn-c" onclick="c3Quick('Check HMAC-SHA256 Gateway and replay nonce cache')">Gateway HMAC</button>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <input type="text" id="c3-input" placeholder="Query broker across Second Brain..." style="flex:1; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:6px 8px; font-family:var(--mono); font-size:11px;" onkeydown="if(event.key==='Enter')c3Send()">
+        <button class="btn-c go" onclick="c3Send()">Ask</button>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<script>
+  const c3State = JSON.parse(JSON.stringify(JEVOmnibus.DEFAULT_OMNIBUS));
+  let c3Graph = null;
+
+  function setCockpitLayout(mode) {
+    const grid = document.getElementById('cockpit-grid');
+    grid.classList.remove('mode-agents-only', 'mode-obsidian-only');
+    if (mode === 'agents') grid.classList.add('mode-agents-only');
+    if (mode === 'obsidian') grid.classList.add('mode-obsidian-only');
+    document.getElementById('m3-btn-agents').classList.toggle('active', mode === 'agents');
+    document.getElementById('m3-btn-obsidian').classList.toggle('active', mode === 'obsidian');
+    document.getElementById('m3-btn-split').classList.toggle('active', mode === 'split');
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 30);
+  }
+
+  function renderC3() {
+    document.getElementById('c3-risk').textContent = c3State.financial_strict_strings.annual_risk_exposure_usd;
+    document.getElementById('c3-save').textContent = c3State.financial_strict_strings.projected_savings_usd;
+    document.getElementById('c3-undo-cnt').textContent = String(JEVOmnibus.getUndoStackCount());
+
+    const ioRoot = document.getElementById('c3-io-combined');
+    ioRoot.replaceChildren();
+
+    const inbox = c3State.inbox_outbox ? (c3State.inbox_outbox.inbox || []) : [];
+    const outbox = c3State.inbox_outbox ? (c3State.inbox_outbox.outbox || []) : [];
+    const combined = inbox.map(x => Object.assign({ dir: 'INBOX' }, x))
+      .concat(outbox.map(x => Object.assign({ dir: 'OUTBOX' }, x)));
+
+    document.getElementById('c3-io-summary').textContent = combined.length + ' EVENTS';
+
+    combined.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'interactive-row';
+      row.onclick = () => {
+        if (c3Graph && item.linked_node) c3Graph.selectNode(item.linked_node, true);
+      };
+      const top = document.createElement('div');
+      top.style.display = 'flex';
+      top.style.justifyContent = 'space-between';
+      top.style.fontFamily = 'var(--mono)';
+      top.style.fontSize = '10.5px';
+      const s1 = document.createElement('span');
+      s1.style.color = item.dir === 'INBOX' ? 'var(--cyan)' : 'var(--gold)';
+      s1.textContent = `[${item.dir}] → Node: ${item.linked_node || 'General'}`;
+      const s2 = document.createElement('span');
+      s2.className = 'tag ' + (item.status === 'processed' || item.status === 'staged' ? 'done' : 'ask');
+      s2.textContent = item.status ? item.status.toUpperCase() : 'OK';
+      top.append(s1, s2);
+
+      const title = document.createElement('div');
+      title.style.fontWeight = '600';
+      title.style.marginTop = '3px';
+      title.textContent = item.title;
+      row.append(top, title);
+      ioRoot.appendChild(row);
+    });
+
+    const agRoot = document.getElementById('c3-agents-list');
+    agRoot.replaceChildren();
+    const agents = c3State.agents_workflows ? (c3State.agents_workflows.workspace_agents || []) : [];
+    agents.forEach(ag => {
+      const row = document.createElement('div');
+      row.className = 'interactive-row';
+      row.onclick = () => {
+        if (c3Graph && ag.linked_node) c3Graph.selectNode(ag.linked_node, true);
+      };
+      const top = document.createElement('div');
+      top.style.display = 'flex';
+      top.style.justifyContent = 'space-between';
+      top.style.fontFamily = 'var(--mono)';
+      top.style.fontSize = '11px';
+      const s1 = document.createElement('strong');
+      s1.textContent = ag.name || ag.label;
+      const s2 = document.createElement('span');
+      s2.className = 'tag done';
+      s2.textContent = ag.status ? ag.status.toUpperCase() : 'GUARDED';
+      top.append(s1, s2);
+      const sub = document.createElement('div');
+      sub.style.fontSize = '11px';
+      sub.style.color = 'var(--muted)';
+      sub.style.marginTop = '3px';
+      sub.textContent = `Zone: ${ag.zone} | Mission: ${ag.mission || ag.linked_node}`;
+      row.append(top, sub);
+      agRoot.appendChild(row);
+    });
+  }
+
+  function c3Log(who, msg) {
+    const box = document.getElementById('c3-chat');
+    const d = document.createElement('div');
+    d.className = 'sub-card';
+    const h = document.createElement('div');
+    h.style.color = who === 'YOU' ? 'var(--gold)' : 'var(--emerald)';
+    h.style.fontWeight = '700';
+    h.textContent = who;
+    const b = document.createElement('div');
+    b.style.whiteSpace = 'pre-wrap';
+    b.style.color = '#cbd5e1';
+    b.textContent = msg;
+    d.append(h, b);
+    box.appendChild(d);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function c3Quick(q) {
+    document.getElementById('c3-input').value = q;
+    c3Send();
+  }
+
+  function c3Send() {
+    const inp = document.getElementById('c3-input');
+    const q = inp.value.trim();
+    if (!q) return;
+    inp.value = '';
+    c3Log('YOU', q);
+    const res = JEVOmnibus.queryOmniscientAssistant(q, c3State);
+    document.getElementById('c3-outcome').textContent = 'OUTCOME: ' + res.outcome.toUpperCase();
+    c3Log(`OMNISCIENT AI [outcome=${res.outcome}]`, res.reply + '\n\nCitations:\n- ' + res.citations.join('\n- '));
+    if (c3Graph && res.matchedNodes && res.matchedNodes.length) {
+      c3Graph.highlightSet(res.matchedNodes);
+    }
+  }
+
+  function c3Undo() {
+    const r = JEVOmnibus.undo();
+    renderC3();
+    c3Log('UNDO STACK', r ? ('Reverted: ' + r.description) : 'Undo stack empty.');
+  }
+
+  function triggerHermesProbe() {
+    const btn = document.getElementById('btn-probe');
+    btn.textContent = 'Probing...';
+    fetch('/api/hermes/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allow_simulation: false })
+    }).then(r => r.json()).then(d => {
+      btn.textContent = '⚡ Probe Hermes';
+      c3Log('HERMES VERDICT', JSON.stringify(d, null, 2));
+    }).catch(err => {
+      btn.textContent = '⚡ Probe Hermes';
+      c3Log('HERMES ERROR', err.message);
+    });
+  }
+
+  function triggerE2EPipeline() {
+    const btn = document.getElementById('btn-e2e');
+    btn.textContent = '🚀 RUNNING...';
+    fetch('/api/jev-e2e/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    }).then(r => r.json()).then(d => {
+      btn.textContent = '🚀 RUN E2E PIPELINE';
+      c3Log('E2E PIPELINE VERDICT', JSON.stringify(d, null, 2));
+    }).catch(err => {
+      btn.textContent = '🚀 RUN E2E PIPELINE';
+      c3Log('E2E RUN', 'Triggered asynchronous E2E pipeline run.');
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    renderC3();
+    const canvas = document.getElementById('c3-canvas');
+    c3Graph = JEVOmnibus.createObsidianGraphController(canvas, {
+      mode: 'orbital3d',
+      onSelectNode: node => {
+        document.getElementById('c3-node-name').textContent = `${node.label} (${node.path})`;
+        document.getElementById('c3-node-ring').textContent = `RING ${node.ring} · ${(node.status || 'ACTIVE').toUpperCase()}`;
+        document.getElementById('c3-node-desc').textContent = node.summary;
+      }
+    });
+    c3Graph.setData(c3State.second_brain);
+    c3Graph.selectNode('Jev Market Judgment', true);
+    c3Log('SYSTEM [outcome=done]', 'Dual-Core Synchronized Cockpit Ready. Click any Agent or Inbox/Outbox Diode row to spotlight its corresponding note and dependencies in the 3D Obsidian Vault.');
+  });
+</script>
+</body>
+</html>

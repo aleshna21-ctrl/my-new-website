@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototype II — Minimal 3D Obsidian Sphere & JEV Bento HUD</title>
+<script src="./static/jev-omnibus.js"></script>
+<style>
+  :root {
+    --bg: #050508;
+    --surface: #0b0c12;
+    --surface-hover: #12141f;
+    --border: rgba(255, 255, 255, 0.08);
+    --border-active: rgba(56, 189, 248, 0.45);
+    --text: #f1f5f9;
+    --muted: #64748b;
+    --cyan: #38bdf8;
+    --emerald: #10b981;
+    --amber: #f59e0b;
+    --rose: #f43f5e;
+    --violet: #a78bfa;
+    --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .proto-bar {
+    background: #020204;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+  .proto-links { display: flex; gap: 8px; align-items: center; }
+  .proto-link {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 3px 10px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    transition: all 0.15s ease;
+  }
+  .proto-link:hover { color: #fff; border-color: var(--cyan); }
+  .proto-link.active {
+    color: var(--text);
+    border-color: var(--cyan);
+    background: rgba(56, 189, 248, 0.12);
+    font-weight: 700;
+  }
+
+  /* Minimal App Layout: Left Rail + Center Stage + Bottom Omniscient Bar */
+  .os-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 230px 1fr;
+    overflow: hidden;
+  }
+  aside.left-nav {
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 18px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .nav-group { display: flex; flex-direction: column; gap: 6px; }
+  .brand-minimal {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 4px 10px 14px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav-btn {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.15s ease;
+  }
+  .nav-btn:hover { background: var(--surface-hover); color: var(--text); }
+  .nav-btn.active {
+    background: rgba(56, 189, 248, 0.1);
+    color: var(--cyan);
+    border-color: var(--border-active);
+    font-weight: 600;
+  }
+
+  .stage-wrap {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+  .stage-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 24px;
+  }
+  .menu-pane { display: none; height: 100%; }
+  .menu-pane.active { display: flex; flex-direction: column; gap: 18px; }
+
+  /* Bento Grid */
+  .bento-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .bento-2 { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 14px; }
+  .bento-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.2s ease;
+  }
+  .bento-card:hover { border-color: rgba(255, 255, 255, 0.16); }
+  .bento-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .chip {
+    padding: 2px 8px;
+    border-radius: 99px;
+    font-family: var(--mono);
+    font-size: 10px;
+    border: 1px solid var(--border);
+    font-weight: 600;
+  }
+  .chip.done { color: var(--emerald); border-color: rgba(16,185,129,0.4); background: rgba(16,185,129,0.08); }
+  .chip.ask { color: var(--amber); border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.08); }
+  .chip.unverified { color: var(--cyan); border-color: rgba(56,189,248,0.4); background: rgba(56,189,248,0.08); }
+  .chip.failed { color: var(--rose); border-color: rgba(244,63,94,0.4); background: rgba(244,63,94,0.08); }
+
+  /* Pipeline Flow (Inbox -> JEV Gate -> Outbox) */
+  .pipeline-flow {
+    display: grid;
+    grid-template-columns: 1fr 290px 1fr;
+    gap: 14px;
+    align-items: stretch;
+  }
+  .flow-item {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  .flow-item:hover { border-color: var(--cyan); }
+  .btn-min {
+    background: var(--surface-hover);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 11px;
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-min:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  /* Minimal 3D Sphere Stage */
+  .minimal-3d-stage {
+    flex: 1;
+    position: relative;
+    background: radial-gradient(circle at 50% 50%, #0d1220 0%, #050508 75%);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    min-height: 480px;
+  }
+  .floating-3d-controls {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    display: flex;
+    gap: 8px;
+    z-index: 5;
+    background: rgba(11, 12, 18, 0.82);
+    backdrop-filter: blur(8px);
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .floating-node-card {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 330px;
+    max-height: calc(100% - 28px);
+    background: rgba(11, 12, 18, 0.88);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 5;
+    overflow-y: auto;
+  }
+
+  /* Docked Omniscient Command Bar at Bottom */
+  .omniscient-dock {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 10px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .omni-row { display: flex; gap: 10px; align-items: center; }
+  .omni-input {
+    flex: 1;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .omni-reply {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: #cbd5e1;
+    max-height: 115px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <div class="proto-links">
+    <strong style="color:var(--cyan);">HUD PROTOTYPES //</strong>
+    <a class="proto-link" href="prototype-1-ring-command.html">Prototype I: Tactical Ring Command</a>
+    <a class="proto-link active" href="prototype-2-minimal-3d.html">Prototype II: Spatial 3D Bento</a>
+    <a class="proto-link" href="prototype-3-cockpit-split.html">Prototype III: Dual-Core Cockpit (Recommended)</a>
+    <a class="proto-link" href="os">AI OS Command Center (Full System)</a>
+  </div>
+  <div>
+    <span style="color:var(--emerald);">● 60fps CPU 3D Fibonacci Sphere</span> ·
+    <span style="color:var(--cyan);">HMAC Gateway &amp; Bento Matrix</span>
+  </div>
+</div>
+
+<div class="os-body">
+  <!-- Minimal Left Navigation Rail -->
+  <aside class="left-nav">
+    <div class="nav-group">
+      <div class="brand-minimal">
+        <span>◐</span>
+        <span>JEV // MINIMAL OS</span>
+      </div>
+      <button class="nav-btn active" id="nav-workflow" onclick="showPane('workflow')">
+        <span>01 · Agents &amp; Diode</span>
+        <span class="chip done">5 ZONES</span>
+      </button>
+      <button class="nav-btn" id="nav-3d" onclick="showPane('3d')">
+        <span>02 · 3D Ring Vault</span>
+        <span class="chip unverified">3D SPHERE</span>
+      </button>
+      <button class="nav-btn" id="nav-jev10" onclick="showPane('jev10')">
+        <span>03 · 10 Levels of Jev</span>
+        <span class="chip done">L1–L10</span>
+      </button>
+    </div>
+
+    <div style="border-top:1px solid var(--border); padding-top:12px; font-family:var(--mono); font-size:11px; color:var(--muted); display:flex; flex-direction:column; gap:8px;">
+      <div>StrictStr Risk: <strong style="color:var(--rose);" id="m2-risk">$826,920.00</strong></div>
+      <div>StrictStr Save: <strong style="color:var(--emerald);" id="m2-save">$702,882.00</strong></div>
+      <div>Hermes Gateway: <strong style="color:var(--cyan);" id="m2-gw-stat">HMAC ACTIVE</strong></div>
+      <div>Mark LVI Stack: <strong style="color:var(--violet);">LOCAL READY</strong></div>
+      <button class="btn-min" onclick="undoLast()">↩️ Undo Last Action (<span id="m2-undo">0</span>)</button>
+    </div>
+  </aside>
+
+  <!-- Main Stage + Bottom Omniscient Assistant Bar -->
+  <div class="stage-wrap">
+    <div class="stage-content">
+
+      <!-- =============================================================== -->
+      <!-- MENU 1: AGENTS, WORKFLOWS & INBOX/OUTBOX DIODE PIPELINE         -->
+      <!-- =============================================================== -->
+      <section class="menu-pane active" id="pane-workflow">
+        <div class="bento-3">
+          <div class="bento-card">
+            <div class="bento-head"><span>Hermes Loopback Engine</span><span class="chip done">127.0.0.1:8080</span></div>
+            <div style="font-family:var(--mono); font-size:14px; font-weight:600;">Qwen3:4b + HMAC Gateway</div>
+            <div style="font-size:12px; color:var(--muted);">Signed JSON-RPC 2.0 Webhook. Replay-defense timestamp with single-use cryptographic nonces.</div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-head"><span>Mark LVI Thinking + JEV</span><span class="chip done">ACTIVE</span></div>
+            <div style="font-family:var(--mono); font-size:14px; font-weight:600;">Jev System-One Engine</div>
+            <div style="font-size:12px; color:var(--muted);">Tool Budget: 12 tools / 11,615 chars. Streaming think stripper + deterministic duplicate call floor.</div>
+          </div>
+          <div class="bento-card">
+            <div class="bento-head"><span>Jev Market Judgment</span><span class="chip done" id="m2-rung-chip">RUNG: NORMAL</span></div>
+            <div style="font-family:var(--mono); font-size:14px; font-weight:600;">JudgmentBoundary (7 Factors)</div>
+            <div style="font-size:12px; color:var(--muted);">Validates qualitative regime; zero financial sizing authority. Hard caps: $50 pos / $25 loss.</div>
+          </div>
+        </div>
+
+        <!-- Inbox -> JEV System-One Gate -> Outbox Flow -->
+        <div class="pipeline-flow">
+          <div class="bento-card">
+            <div class="bento-head"><span>📥 INBOX DIODE</span><span class="chip done" id="m2-inbox-cnt">4 ITEMS</span></div>
+            <div id="m2-inbox-items"></div>
+          </div>
+
+          <!-- Center JEV System-One Live Gate -->
+          <div class="bento-card" style="border-color:var(--border-active);">
+            <div class="bento-head"><span style="color:var(--cyan);">⚡ JEV SYSTEM-ONE GATE</span><span class="chip unverified">~12.8ms</span></div>
+            <div style="font-size:11.5px; color:var(--muted);">Test a live message or command against JEV <code>noul</code>, <code>choice</code>, and <code>score</code>:</div>
+            <textarea id="jev-probe-input" rows="3" style="width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px; font-family:var(--mono); font-size:11px;">Checkout is broken for all customers. Losing revenue. Need immediate reconciliation check.</textarea>
+            <button class="btn-min" style="border-color:var(--cyan); color:var(--cyan);" onclick="runJevLiveGate()">Run System-One Judgment →</button>
+            <pre id="jev-probe-result" style="margin:0; font-family:var(--mono); font-size:10.5px; color:var(--emerald); background:var(--bg); padding:8px; border-radius:6px; border:1px solid var(--border); white-space:pre-wrap;"></pre>
+          </div>
+
+          <div class="bento-card">
+            <div class="bento-head"><span>📤 OUTBOX DIODE</span><span class="chip ask" id="m2-outbox-cnt">7 ITEMS</span></div>
+            <div id="m2-outbox-items"></div>
+          </div>
+        </div>
+
+        <!-- 5 Agent Capability Zones -->
+        <div class="bento-card">
+          <div class="bento-head"><span>🛡️ 5-ZONE AGENT WORKFLOW MATRIX (`capability_policy.json`)</span><span class="chip done">LOOPBACK GUARDED</span></div>
+          <div id="m2-agents-grid" style="display:grid; grid-template-columns:repeat(5, 1fr); gap:10px;"></div>
+        </div>
+      </section>
+
+      <!-- =============================================================== -->
+      <!-- MENU 2: MINIMAL 3D ORBITAL & FIBONACCI SPHERE OBSIDIAN VAULT    -->
+      <!-- =============================================================== -->
+      <section class="menu-pane" id="pane-3d">
+        <div class="minimal-3d-stage">
+          <div class="floating-3d-controls">
+            <button class="btn-min" onclick="switch3DMode('orbital3d')">🪐 3D Tilted Orbital Rings</button>
+            <button class="btn-min" onclick="switch3DMode('sphere3d')">🌐 3D Fibonacci Sphere</button>
+            <button class="btn-min" onclick="switch3DMode('ring2d')">◎ 2D Minimal Ring</button>
+            <button class="btn-min" onclick="toggleSpin()">⏯ Auto-Orbit</button>
+            <input type="text" placeholder="Search 28 vault nodes..." oninput="m2Graph.search(this.value)" style="background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:6px; padding:4px 8px; font-family:var(--mono); font-size:11px;">
+          </div>
+
+          <canvas id="m2-canvas"></canvas>
+
+          <div class="floating-node-card">
+            <div class="bento-head">
+              <span id="m2-node-ring">RING 0</span>
+              <span class="chip done" id="m2-node-status">ACTIVE</span>
+            </div>
+            <div style="font-family:var(--mono); font-size:14px; font-weight:700; color:var(--cyan);" id="m2-node-title"></div>
+            <div style="font-family:var(--mono); font-size:10.5px; color:var(--muted);" id="m2-node-path"></div>
+            <div style="font-size:12px; line-height:1.45;" id="m2-node-summary"></div>
+            <div style="font-family:var(--mono); font-size:10.5px; color:var(--violet);" id="m2-node-deps"></div>
+            <pre id="m2-node-raw" style="margin:0; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:8px; font-family:var(--mono); font-size:10px; color:#94a3b8; white-space:pre-wrap; max-height:180px; overflow-y:auto;"></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- =============================================================== -->
+      <!-- MENU 3: 10 LEVELS OF JEV INTERACTIVE CATALOG                    -->
+      <!-- =============================================================== -->
+      <section class="menu-pane" id="pane-jev10">
+        <div class="bento-card">
+          <div class="bento-head"><span>THE 10 LEVELS OF JEV (CODE LEVELS 1–5 + AGENT HARNESS LEVELS 6–10)</span><span class="chip done">$16.80 / 1M CALLS</span></div>
+          <div id="m2-levels-grid" style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;"></div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Bottom Omniscient Assistant Bar -->
+    <div class="omniscient-dock">
+      <div class="omni-row">
+        <span class="chip done" id="m2-omni-badge">OMNISCIENT AI · DONE</span>
+        <input type="text" class="omni-input" id="m2-omni-input" placeholder="Ask Omniscient AI anything about Second Brain, Jev Market Judgment, Inbox/Outbox, or Mark LVI (Press Enter)..." onkeydown="if(event.key==='Enter')runOmni()">
+        <button class="btn-min" onclick="setOmniQuery('Show Jev Market Judgment rules and 9 trading roles')">Jev Judgment</button>
+        <button class="btn-min" onclick="setOmniQuery('Audit all 5 agent zones and disabled capabilities')">Audit Zones</button>
+        <button class="btn-min" style="border-color:var(--emerald); color:var(--emerald);" onclick="runOmni()">Query All →</button>
+      </div>
+      <div class="omni-reply" id="m2-omni-reply"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const m2State = JSON.parse(JSON.stringify(JEVOmnibus.DEFAULT_OMNIBUS));
+  let m2Graph = null;
+
+  function initM2() {
+    document.getElementById('m2-risk').textContent = m2State.financial_strict_strings.annual_risk_exposure_usd;
+    document.getElementById('m2-save').textContent = m2State.financial_strict_strings.projected_savings_usd;
+
+    renderM2Pipeline();
+    renderM2Agents();
+    renderM2Levels();
+    runJevLiveGate();
+
+    const canvas = document.getElementById('m2-canvas');
+    m2Graph = JEVOmnibus.createObsidianGraphController(canvas, {
+      mode: 'sphere3d',
+      onSelectNode: node => {
+        document.getElementById('m2-node-ring').textContent = 'RING ' + node.ring + ' · ' + (node.group || '').toUpperCase();
+        document.getElementById('m2-node-status').textContent = (node.status || 'active').toUpperCase();
+        document.getElementById('m2-node-title').textContent = node.label || node.id;
+        document.getElementById('m2-node-path').textContent = node.path || (node.id + '.md');
+        document.getElementById('m2-node-summary').textContent = node.summary || '';
+        document.getElementById('m2-node-deps').textContent = 'Requires: ' + ((node.requires && node.requires.length) ? node.requires.join(', ') : 'None (Root Core)');
+        document.getElementById('m2-node-raw').textContent = JEVOmnibus.wrapUntrusted(node.content || '', node.id);
+      }
+    });
+    m2Graph.setData(m2State.second_brain);
+    m2Graph.selectNode('Jev Market Judgment', true);
+
+    setOmniQuery('Summarize Jev Market Judgment, Second Brain rings, and Inbox/Outbox status');
+  }
+
+  function renderM2Pipeline() {
+    const inRoot = document.getElementById('m2-inbox-items');
+    inRoot.replaceChildren();
+    const inbox = m2State.inbox_outbox ? (m2State.inbox_outbox.inbox || []) : [];
+    document.getElementById('m2-inbox-cnt').textContent = inbox.length + ' ITEMS';
+    inbox.forEach(item => {
+      const d = document.createElement('div');
+      d.className = 'flow-item';
+      const top = document.createElement('div');
+      top.style.display = 'flex';
+      top.style.justifyContent = 'space-between';
+      top.innerHTML = `<span style="font-family:var(--mono); font-size:10.5px; color:var(--cyan); font-weight:700;">${item.id}</span>
+                       <span class="chip ${item.status === 'processed' ? 'done' : 'unverified'}">${item.status.toUpperCase()}</span>`;
+      const title = document.createElement('div');
+      title.style.fontWeight = '600';
+      title.style.marginTop = '4px';
+      title.textContent = item.title;
+      d.append(top, title);
+      d.onclick = () => {
+        showPane('3d');
+        if (m2Graph && item.linked_node) m2Graph.selectNode(item.linked_node, true);
+      };
+      inRoot.appendChild(d);
+    });
+
+    const outRoot = document.getElementById('m2-outbox-items');
+    outRoot.replaceChildren();
+    const outbox = m2State.inbox_outbox ? (m2State.inbox_outbox.outbox || []) : [];
+    document.getElementById('m2-outbox-cnt').textContent = outbox.length + ' ITEMS';
+    outbox.forEach(item => {
+      const d = document.createElement('div');
+      d.className = 'flow-item';
+      const top = document.createElement('div');
+      top.style.display = 'flex';
+      top.style.justifyContent = 'space-between';
+      top.innerHTML = `<span style="font-family:var(--mono); font-size:10.5px; color:var(--amber); font-weight:700;">${item.id}</span>
+                       <span class="chip ${item.status === 'staged' ? 'done' : 'ask'}">${item.status.toUpperCase()}</span>`;
+      const title = document.createElement('div');
+      title.style.fontWeight = '600';
+      title.style.marginTop = '4px';
+      title.textContent = item.title;
+      d.append(top, title);
+      d.onclick = () => {
+        showPane('3d');
+        if (m2Graph && item.linked_node) m2Graph.selectNode(item.linked_node, true);
+      };
+      outRoot.appendChild(d);
+    });
+  }
+
+  function renderM2Agents() {
+    const grid = document.getElementById('m2-agents-grid');
+    grid.replaceChildren();
+    const agents = m2State.agents_workflows ? m2State.agents_workflows.workspace_agents : [];
+    agents.forEach(a => {
+      const card = document.createElement('div');
+      card.style.background = 'var(--bg)';
+      card.style.border = '1px solid var(--border)';
+      card.style.borderRadius = '8px';
+      card.style.padding = '10px';
+      card.style.display = 'flex';
+      card.style.flexDirection = 'column';
+      card.style.gap = '6px';
+      card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="chip done">${a.status.toUpperCase()}</span>
+          <span style="font-family:var(--mono); font-size:10px; color:var(--muted);">${a.zone}</span>
+        </div>
+        <div style="font-weight:700; font-size:12px; color:var(--text);">${a.name}</div>
+        <div style="font-size:11px; color:var(--muted);">${a.mission}</div>
+      `;
+      card.onclick = () => {
+        showPane('3d');
+        if (m2Graph && a.vault_note) m2Graph.selectNode(a.vault_note, true);
+      };
+      grid.appendChild(card);
+    });
+  }
+
+  function renderM2Levels() {
+    const grid = document.getElementById('m2-levels-grid');
+    grid.replaceChildren();
+    const levels = m2State.ten_levels_of_jev ? m2State.ten_levels_of_jev.levels : [];
+    levels.forEach(lvl => {
+      const card = document.createElement('div');
+      card.style.background = 'var(--bg)';
+      card.style.border = '1px solid var(--border)';
+      card.style.borderRadius = '8px';
+      card.style.padding = '10px 12px';
+      card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong style="color:var(--cyan); font-family:var(--mono); font-size:11.5px;">LEVEL ${lvl.level}: ${lvl.name}</strong>
+          <span class="chip done">${lvl.tier.toUpperCase()}</span>
+        </div>
+        <div style="font-size:11.5px; color:var(--text); margin-top:4px;">${lvl.contract}</div>
+        <div style="font-family:var(--mono); font-size:10px; color:var(--muted); margin-top:4px;">${lvl.observable_invariant}</div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  function showPane(paneId) {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.menu-pane').forEach(p => p.classList.remove('active'));
+    document.getElementById('nav-' + paneId).classList.add('active');
+    document.getElementById('pane-' + paneId).classList.add('active');
+    if (paneId === '3d' && m2Graph) setTimeout(() => m2Graph.resize(), 50);
+  }
+
+  function switch3DMode(mode) {
+    if (m2Graph) m2Graph.setMode(mode);
+  }
+
+  function toggleSpin() {
+    if (m2Graph) m2Graph.toggleAutoSpin();
+  }
+
+  function runJevLiveGate() {
+    const text = document.getElementById('jev-probe-input').value;
+    const res = JEVOmnibus.evaluateJevSystemOne({ message: text }, {
+      is_urgent: { type: 'noul', question: 'Is message describing customer impact or downtime?' },
+      route: { type: 'choice', options: ['fast_agent', 'human_gate'] },
+      risk_score: { type: 'score', levels: ['low', 'moderate', 'high', 'critical'] }
+    });
+    document.getElementById('jev-probe-result').textContent = JSON.stringify(res, null, 2);
+  }
+
+  function setOmniQuery(q) {
+    document.getElementById('m2-omni-input').value = q;
+    runOmni();
+  }
+
+  function runOmni() {
+    const q = document.getElementById('m2-omni-input').value.trim();
+    if (!q) return;
+    const res = JEVOmnibus.queryOmniscientAssistant(q, m2State);
+    const badge = document.getElementById('m2-omni-badge');
+    badge.textContent = 'OMNISCIENT AI · ' + res.outcome.toUpperCase();
+    badge.className = 'chip ' + (res.outcome === 'done' ? 'done' : 'failed');
+    document.getElementById('m2-omni-reply').textContent = res.reply + '\n\nCitations:\n- ' + res.citations.join('\n- ');
+    if (m2Graph && res.matchedNodes && res.matchedNodes.length) {
+      m2Graph.highlightSet(res.matchedNodes);
+    }
+  }
+
+  function undoLast() {
+    const item = JEVOmnibus.undo();
+    if (!item) { alert('No actions in undo stack.'); return; }
+    document.getElementById('m2-undo').textContent = JEVOmnibus.getUndoStackCount();
+    alert('Reverted action: ' + item.description);
+  }
+
+  window.addEventListener('DOMContentLoaded', initM2);
+</script>
+</body>
+</html>

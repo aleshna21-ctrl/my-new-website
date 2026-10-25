@@ -1251,7 +1251,8 @@ def _hot(mtime: float | None, now_ts: float, window: int = 90) -> bool:
 
 def compose_frame(*, hermes: dict, ledger: dict, gtm: dict, alerts_status: dict, inbox: dict,
                   guard_events: list, e2e_events: list, board: dict, plan: dict,
-                  stats: dict, mtimes: dict, server: dict, now: datetime | None = None) -> dict[str, Any]:
+                  stats: dict, mtimes: dict, server: dict, now: datetime | None = None,
+                  gateway: dict | None = None) -> dict[str, Any]:
     now = now or datetime.now()
     now_ts = time.time()
     day_ago = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -1325,12 +1326,16 @@ def compose_frame(*, hermes: dict, ledger: dict, gtm: dict, alerts_status: dict,
             "outbox_review": gtm.get("needs_review", 0),
             "outbox_total": gtm.get("total", 0),
             "quarantine": metrics.get("quarantined", 0),
+            "gateway_crons": gateway.get("crons_enabled", 0) if gateway else 0,
+            "gateway_tasks": gateway.get("tasks_executed", 0) if gateway else 0,
+            "gateway_online": bool(gateway.get("hermes_online", False)) if gateway else False,
             "notify_pending": alerts_status.get("pending_outbox_events", 0),
             "alerts": len(alerts),
             "alerts_urgent": sum(1 for a in alerts if a["severity"] in ("crit", "warn")),
             "tasks_open": len(open_tasks),
             "vital_open": sum(1 for t in open_tasks if t.get("vital")),
         },
+        "gateway": gateway or {},
         "board_revision": board.get("revision", 0),
     }
     fingerprint = hashlib.sha256(json.dumps(body, sort_keys=True, default=str).encode()).hexdigest()[:16]

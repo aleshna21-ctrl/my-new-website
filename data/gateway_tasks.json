@@ -1,0 +1,608 @@
+[
+  {
+    "task_id": "task-cmd-e9893051",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:41:47.281647+00:00",
+    "duration_ms": 31.0
+  },
+  {
+    "task_id": "task-cmd-9bef5027",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T21:41:47.346341+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:41:47.346341+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-2e0852a4",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:41:47.351067+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-6f0a1237",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:42:31.710563+00:00",
+    "duration_ms": 15.0
+  },
+  {
+    "task_id": "task-cmd-3f4b0c88",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T21:42:31.797956+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:42:31.797956+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-339e19b1",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:42:31.803159+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-9a3ac1a4",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T21:42:59.648754+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:42:59.648754+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-f9347147",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T21:42:59.756868+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:42:59.756868+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-733aa1d1",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:43:00.280817+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-9c94ccd9",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T21:43:00.348748+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:43:00.348748+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-b5d5c3a8",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:43:00.353379+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-9d720ca9",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T21:55:14.031055+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:55:14.031055+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-e658417b",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T21:55:14.168149+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:55:14.168149+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-a50ce40a",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:55:14.690268+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-7f75285a",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T21:55:14.741079+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:55:14.741079+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-e97793b3",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T21:55:14.745819+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-820c3ec4",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T22:05:32.338618+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T22:05:32.338618+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-adc3356e",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T22:05:32.438712+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T22:05:32.438712+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-8bf14f17",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T22:05:32.948940+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-42c47673",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-25T22:05:33.005397+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T22:05:33.005397+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-931d4248",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-25T22:05:33.011644+00:00",
+    "duration_ms": 0.0
+  }
+]

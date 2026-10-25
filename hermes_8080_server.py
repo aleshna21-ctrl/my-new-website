@@ -73,14 +73,112 @@ class HermesModelHandler(http.server.BaseHTTPRequestHandler):
                 })
                 return
 
+        if path.startswith("/gateway/v1/health"):
+            self._send_json({
+                "status": "ok",
+                "service": "hermes-gateway-daemon",
+                "protocol": "JSON-RPC 2.0 / REST Webhook",
+                "auth_method": "HMAC-SHA256 (Anti-Replay Nonce + Timestamp)",
+                "listening": f"{HOST}:{PORT}",
+                "upstream": UPSTREAM_BASE,
+                "model": DEFAULT_MODEL,
+                "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            })
+            return
+
+        if path.startswith("/gateway/v1/crons"):
+            try:
+                from hud.gateway import load_cron_registry
+                self._send_json({"status": "ok", "crons": load_cron_registry()})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+            return
+
+        if path.startswith("/gateway/v1/tasks"):
+            try:
+                from hud.gateway import load_task_history
+                self._send_json({"status": "ok", "tasks": load_task_history()})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+            return
+
         self._send_json({"error": "Not found", "path": self.path}, 404)
 
     def do_POST(self):
         path, _, _ = self.path.partition("?")
-        if path.startswith("/v1/chat/completions"):
-            content_len = int(self.headers.get("Content-Length", 0))
-            raw_body = self.rfile.read(content_len) if content_len > 0 else b"{}"
+        content_len = int(self.headers.get("Content-Length", 0))
+        raw_body = self.rfile.read(content_len) if content_len > 0 else b"{}"
 
+        # --- Gateway Routes with HMAC-SHA256 & Anti-Replay Authentication ---
+        if path.startswith("/gateway/v1/"):
+            try:
+                from hud.gateway import (
+                    verify_gateway_request, GatewayAuthError,
+                    execute_gateway_rpc, execute_task_command,
+                    update_cron_job, trigger_cron_job
+                )
+            except ImportError as ie:
+                self._send_json({"error": f"Gateway module not found: {ie}"}, 500)
+                return
+
+            try:
+                verify_gateway_request(dict(self.headers), "POST", path, raw_body)
+            except GatewayAuthError as gae:
+                self._send_json({
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32000, "message": f"Unauthorized: {gae}"},
+                    "status": "unauthorized"
+                }, 401)
+                return
+
+            try:
+                body_json = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+            except Exception:
+                self._send_json({
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32700, "message": "Parse error: invalid JSON payload"},
+                    "status": "error"
+                }, 400)
+                return
+
+            if path == "/gateway/v1/rpc":
+                req_id = body_json.get("id")
+                method = body_json.get("method", "")
+                params = body_json.get("params", {})
+                rpc_res = execute_gateway_rpc(method, params)
+                out = {
+                    "jsonrpc": "2.0",
+                    "id": req_id,
+                    "result": rpc_res.get("result"),
+                    "error": rpc_res.get("error"),
+                    "status": "error" if rpc_res.get("error") else "ok"
+                }
+                status_code = 400 if rpc_res.get("error") else 200
+                self._send_json(out, status_code)
+                return
+
+            elif path == "/gateway/v1/tasks":
+                cmd = body_json.get("command") or body_json.get("cmd", "ping")
+                params = body_json.get("params", body_json)
+                res = execute_task_command(cmd, params)
+                self._send_json({"status": "ok", "task": res})
+                return
+
+            elif path == "/gateway/v1/crons":
+                action = body_json.get("action", "update")
+                cron_id = body_json.get("id") or body_json.get("cron_id")
+                if action == "trigger":
+                    res = trigger_cron_job(cron_id)
+                    self._send_json({"status": "ok", "triggered": res})
+                else:
+                    res = update_cron_job(cron_id, body_json)
+                    self._send_json({"status": "ok", "cron": res})
+                return
+
+            self._send_json({"error": "Unknown gateway endpoint"}, 404)
+            return
+
+        if path.startswith("/v1/chat/completions"):
             upstream_url = f"{UPSTREAM_BASE}/v1/chat/completions"
             req = urllib.request.Request(upstream_url, data=raw_body, method="POST")
             req.add_header("Content-Type", "application/json")

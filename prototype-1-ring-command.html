@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototype I — JEV Tactical Ring Vault & Diode Command HUD</title>
+<script src="./static/jev-omnibus.js"></script>
+<style>
+  :root {
+    --bg: #060911;
+    --panel: #0d1322;
+    --panel-alt: #111a2e;
+    --border: #1e2d4a;
+    --border-bright: #2e4775;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --cyan: #38bdf8;
+    --purple: #a78bfa;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --mono: ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Prototype Switcher Ribbon */
+  .proto-bar {
+    background: #04060c;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-family: var(--mono);
+    flex-shrink: 0;
+  }
+  .proto-links { display: flex; gap: 8px; align-items: center; }
+  .proto-link {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    transition: all 0.15s ease;
+  }
+  .proto-link:hover { color: #fff; border-color: var(--cyan); }
+  .proto-link.active {
+    color: var(--cyan);
+    border-color: var(--cyan);
+    background: rgba(56, 189, 248, 0.15);
+    font-weight: 700;
+  }
+
+  /* Main HUD Header */
+  header.hud-top {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .brand-block { display: flex; align-items: center; gap: 12px; }
+  .brand-title { font-family: var(--mono); font-size: 14px; font-weight: 700; letter-spacing: 0.5px; color: var(--cyan); }
+  .menu-tabs { display: flex; gap: 8px; }
+  .menu-tab {
+    background: var(--panel-alt);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 6px 13px;
+    border-radius: 5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--mono);
+    transition: all 0.15s ease;
+  }
+  .menu-tab:hover { color: #fff; border-color: var(--border-bright); }
+  .menu-tab.active {
+    background: rgba(56, 189, 248, 0.16);
+    color: #fff;
+    border-color: var(--cyan);
+  }
+  .telemetry-pills { display: flex; gap: 10px; align-items: center; font-family: var(--mono); font-size: 11px; }
+  .pill {
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .ok { color: var(--green); border-color: rgba(16,185,129,0.4); }
+  .warn { color: var(--amber); border-color: rgba(245,158,11,0.4); }
+  .err { color: var(--red); border-color: rgba(239,68,68,0.4); }
+
+  /* Confirmation Banner (Mark LVI confirm.py gate) */
+  #confirm-banner {
+    display: none;
+    background: rgba(245, 158, 11, 0.14);
+    border-bottom: 1px solid var(--amber);
+    padding: 8px 18px;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  #confirm-banner.show { display: flex; }
+
+  /* Workspace Shell: Main View + Persistent Right AI Assistant */
+  .workspace-shell {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 390px;
+    overflow: hidden;
+  }
+  .main-stage {
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .view-section { display: none; flex-direction: column; gap: 16px; height: 100%; }
+  .view-section.active { display: flex; }
+
+  /* Cards & Tactical Panels */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  .card-title {
+    margin: 0;
+    font-size: 12.5px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--cyan);
+  }
+  .badge {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 700;
+  }
+  .badge-done { background: rgba(16,185,129,0.18); color: var(--green); border: 1px solid var(--green); }
+  .badge-unverified { background: rgba(56,189,248,0.18); color: var(--cyan); border: 1px solid var(--cyan); }
+  .badge-failed { background: rgba(239,68,68,0.18); color: var(--red); border: 1px solid var(--red); }
+  .badge-ask { background: rgba(245,158,11,0.18); color: var(--amber); border: 1px solid var(--amber); }
+
+  /* Financial Banner */
+  .fin-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .fin-cell {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 12px;
+  }
+  .fin-label { font-size: 10.5px; color: var(--muted); font-family: var(--mono); }
+  .fin-val { font-size: 15px; font-weight: 700; font-family: var(--mono); margin-top: 3px; }
+
+  /* 7-Rung Market Judgment Simulator */
+  .rung-form {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .rung-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--muted);
+  }
+  .rung-form select, .rung-form input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .code-box {
+    background: #04060b;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: #cbd5e1;
+    white-space: pre-wrap;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  /* Inbox / Outbox Diode Rows */
+  .io-list { display: flex; flex-direction: column; gap: 8px; }
+  .io-row {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  .io-row:hover { border-color: var(--cyan); }
+  .io-left { display: flex; flex-direction: column; gap: 4px; }
+  .io-meta { font-size: 10.5px; color: var(--muted); }
+
+  /* Obsidian Ring View */
+  .ring-workbench {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 14px;
+    min-height: 520px;
+  }
+  .canvas-box {
+    background: radial-gradient(circle at center, #10192e 0%, #060911 100%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+  .canvas-toolbar {
+    padding: 8px 12px;
+    background: rgba(13, 19, 34, 0.85);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    z-index: 2;
+  }
+  #obsidian-canvas {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: grab;
+  }
+  #obsidian-canvas:active { cursor: grabbing; }
+
+  .node-inspector {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-y: auto;
+  }
+  .inspector-title { font-size: 14px; font-weight: 700; color: var(--cyan); font-family: var(--mono); }
+  .dep-chip {
+    display: inline-block;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10.5px;
+    font-family: var(--mono);
+    margin: 2px 4px 2px 0;
+    color: var(--text);
+  }
+
+  /* Right Assistant Rail */
+  aside.assistant-rail {
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .rail-head {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .chat-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .msg {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .msg.user {
+    background: rgba(56, 189, 248, 0.08);
+    border-color: rgba(56, 189, 248, 0.3);
+  }
+  .rail-foot {
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .quick-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip-btn {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .chip-btn:hover { color: var(--cyan); border-color: var(--cyan); }
+  .chat-form { display: flex; gap: 8px; }
+  .chat-form input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11.5px;
+  }
+  .btn {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.15s ease;
+  }
+  .btn:hover { border-color: var(--cyan); color: var(--cyan); }
+  .btn-primary { background: rgba(56,189,248,0.18); border-color: var(--cyan); color: #fff; }
+  .btn-primary:hover { background: rgba(56,189,248,0.28); }
+</style>
+</head>
+<body>
+
+<!-- Prototype Switcher Ribbon -->
+<div class="proto-bar">
+  <div class="proto-links">
+    <strong style="color:var(--cyan);">HUD PROTOTYPES //</strong>
+    <a href="./prototype-1-ring-command.html" class="proto-link active">Prototype I: Tactical Ring Command</a>
+    <a href="./prototype-2-minimal-3d.html" class="proto-link">Prototype II: Spatial 3D Bento</a>
+    <a href="./prototype-3-cockpit-split.html" class="proto-link">Prototype III: Dual-Core Cockpit (Recommended)</a>
+    <a href="./os" class="proto-link">AI OS Command Center (Full System)</a>
+  </div>
+  <div style="color:var(--muted); font-size:10.5px;">
+    Architecture: Concentric 4-Ring Radar + 7-Rung Matrix + Tactical Terminal
+  </div>
+</div>
+
+<!-- Main Header -->
+<header class="hud-top">
+  <div class="brand-block">
+    <span class="brand-title">JEV // TACTICAL RING HUD</span>
+    <nav class="menu-tabs" role="tablist">
+      <button class="menu-tab active" id="tab-menu1" onclick="switchMenu(1)">MENU 1: CAPABILITY MATRIX &amp; 7-RUNG JEV</button>
+      <button class="menu-tab" id="tab-menu2" onclick="switchMenu(2)">MENU 2: OBSIDIAN 4-RING CONCENTRIC RADAR</button>
+    </nav>
+  </div>
+  <div class="telemetry-pills">
+    <span class="pill ok" id="pill-hermes">HERMES :8080 [OK]</span>
+    <span class="pill ok" id="pill-gateway">GATEWAY: HMAC-SHA256</span>
+    <span class="pill ok" id="pill-ledger">ZERO-LOSS: PASS</span>
+    <button class="btn btn-primary" onclick="triggerProbe()" id="btn-probe">⚡ Probe Hermes</button>
+  </div>
+</header>
+
+<!-- Confirmation Banner for Guardrail Actions -->
+<div id="confirm-banner">
+  <div>
+    <strong style="color:var(--amber);">⚠️ OPERATOR CONFIRMATION REQUIRED (Mark LVI Guardrail):</strong>
+    <span id="confirm-text" style="margin-left:8px;">Action requires manual acknowledgment before execution.</span>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn" style="border-color:var(--green); color:var(--green);" onclick="resolveConfirm(true)">Confirm Execution</button>
+    <button class="btn" style="border-color:var(--red); color:var(--red);" onclick="resolveConfirm(false)">Abort</button>
+  </div>
+</div>
+
+<!-- Main Workspace Shell -->
+<div class="workspace-shell">
+  <main class="main-stage">
+
+    <!-- Strict Financial Invariant Banner -->
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">💰 StrictStr Financial Invariants &amp; Cost Guard</h2>
+        <span class="badge badge-done" id="fin-badge">FORMULA: 12 == 10 + 1 + 1 (PASS)</span>
+      </div>
+      <div class="fin-grid">
+        <div class="fin-cell">
+          <div class="fin-label">Annual Risk Exposure</div>
+          <div class="fin-val" style="color:var(--amber);" id="fin-risk">$826,920.00</div>
+        </div>
+        <div class="fin-cell">
+          <div class="fin-label">Projected Net Savings</div>
+          <div class="fin-val" style="color:var(--green);" id="fin-save">$702,882.00</div>
+        </div>
+        <div class="fin-cell">
+          <div class="fin-label">JEV Cost per 1M Calls</div>
+          <div class="fin-val" style="color:var(--cyan);" id="fin-cost-jev">$16.80</div>
+        </div>
+        <div class="fin-cell">
+          <div class="fin-label">SOTA Cost per 1M Calls</div>
+          <div class="fin-val" style="color:var(--red);" id="fin-cost-sota">$3,500.00</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- MENU 1: JEV 7-RUNG MARKET JUDGMENT & CAPABILITY ZONES             -->
+    <!-- ================================================================= -->
+    <section class="view-section active" id="view-menu1">
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title">⚖️ JEV 7-Rung Market Judgment Engine (Deterministic System-One)</h2>
+          <span class="badge badge-done" id="rung-badge">RUNG: NORMAL</span>
+        </div>
+        <div class="rung-form">
+          <label>Toxic Flow
+            <select id="j-toxic" onchange="recalcRung()"><option>low</option><option>moderate</option><option>high</option></select>
+          </label>
+          <label>Liquidity
+            <select id="j-liquidity" onchange="recalcRung()"><option>low</option><option>elevated</option><option>high</option></select>
+          </label>
+          <label>Quote Env
+            <select id="j-quote" onchange="recalcRung()"><option>clean</option><option>wide</option><option>stale</option></select>
+          </label>
+          <label>Inventory
+            <select id="j-inventory" onchange="recalcRung()"><option>neutral</option><option>elevated</option></select>
+          </label>
+          <label>Exec Health
+            <select id="j-exec" onchange="recalcRung()"><option>healthy</option><option>degraded</option><option>critical</option></select>
+          </label>
+          <label>Hard Risk Cap
+            <select id="j-breach" onchange="recalcRung()"><option value="false">PASS ($50/$25)</option><option value="true">BREACH -&gt; KILL</option></select>
+          </label>
+        </div>
+        <pre class="code-box" id="rung-output"></pre>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title">🛡️ 5-Zone Capability Matrix &amp; Mark LVI Outcome Gating</h2>
+          <span class="badge badge-done">UNLISTED PLUGINS: OFF</span>
+        </div>
+        <div class="io-list" id="agent-zones-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2 class="card-title">📬 Inbound / Outbound Air-Gapped Diode Event Stream</h2>
+          <span class="badge badge-unverified">REPLAY DEFENSE ACTIVE</span>
+        </div>
+        <div class="io-list" id="diode-stream-list"></div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- MENU 2: OBSIDIAN CONCENTRIC RING VAULT                            -->
+    <!-- ================================================================= -->
+    <section class="view-section" id="view-menu2">
+      <div class="ring-workbench">
+        <div class="canvas-box">
+          <div class="canvas-toolbar">
+            <div style="display:flex; gap:6px; align-items:center;">
+              <button class="btn" id="mode-ring2d" onclick="setGraphMode('ring2d')">◎ 2D Concentric Ring</button>
+              <button class="btn" id="mode-orbital3d" onclick="setGraphMode('orbital3d')">🪐 Minimal 3D Orbital</button>
+              <select id="ring-filter" onchange="filterGraphRing(this.value)" class="btn">
+                <option value="all">All 4 Rings (28 Nodes)</option>
+                <option value="0">Ring 0: Shared Core</option>
+                <option value="1">Ring 1: Second Brain Modules</option>
+                <option value="2">Ring 2: JEV Roles &amp; Identities</option>
+                <option value="3">Ring 3: Workspace Diodes &amp; Mark LVI</option>
+              </select>
+            </div>
+            <input type="text" id="ring-search" placeholder="Search nodes (e.g. judgment, risk, gtm)..." oninput="searchGraph(this.value)" class="btn" style="width:230px;">
+          </div>
+          <canvas id="obsidian-canvas"></canvas>
+        </div>
+
+        <div class="node-inspector" id="node-inspector">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="inspector-title" id="insp-title">Select a Node</span>
+            <span class="badge badge-done" id="insp-ring">Ring —</span>
+          </div>
+          <div class="io-meta" id="insp-path">Click any node in the radar graph</div>
+          <div style="border-top:1px solid var(--border); padding-top:8px;">
+            <strong style="font-size:11px; font-family:var(--mono); color:var(--cyan);">SUMMARY / MISSION</strong>
+            <p id="insp-summary" style="font-size:12px; color:#cbd5e1; line-height:1.4; margin:4px 0 0;"></p>
+          </div>
+          <div style="border-top:1px solid var(--border); padding-top:8px;">
+            <strong style="font-size:11px; font-family:var(--mono); color:var(--amber);">PREREQUISITES (REQUIRES)</strong>
+            <div id="insp-requires" style="margin-top:4px;"></div>
+          </div>
+          <div style="border-top:1px solid var(--border); padding-top:8px;">
+            <strong style="font-size:11px; font-family:var(--mono); color:var(--green);">OUTPUTS (PROVIDES)</strong>
+            <div id="insp-provides" style="margin-top:4px;"></div>
+          </div>
+          <div style="margin-top:auto; padding-top:10px; border-top:1px solid var(--border);">
+            <button class="btn btn-primary" style="width:100%;" onclick="queryNodeInAssistant()" id="btn-trace-node">⚡ Query Omniscient Assistant on Node</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Persistent Right Tactical AI Assistant & Terminal Stream -->
+  <aside class="assistant-rail">
+    <div class="rail-head">
+      <strong style="font-family:var(--mono); font-size:12.5px; color:var(--cyan);">OMNISCIENT TACTICAL BROKER</strong>
+      <span class="badge badge-done" id="assist-outcome-badge">OUTCOME: DONE</span>
+    </div>
+    <div class="chat-log" id="chat-log"></div>
+    <div class="rail-foot">
+      <div class="quick-chips">
+        <button class="chip-btn" onclick="runQuickPrompt('Verify Zero-Loss Ledger Invariant')">Audit Ledger</button>
+        <button class="chip-btn" onclick="runQuickPrompt('Check Jev Market Judgment boundaries')">Market Judgment</button>
+        <button class="chip-btn" onclick="runQuickPrompt('Audit Level 6 Guardrail on rm -rf')">L6 Guardrail</button>
+        <button class="chip-btn" onclick="runQuickPrompt('Trace Hermes loopback connectivity')">Hermes Probe</button>
+      </div>
+      <form class="chat-form" onsubmit="event.preventDefault(); sendAssistantQuery();">
+        <input type="text" id="chat-input" placeholder="Query broker (e.g. 'show risk formula', 'explain diode')...">
+        <button class="btn btn-primary" type="submit">Send</button>
+      </form>
+    </div>
+  </aside>
+</div>
+
+<script>
+  const state = JSON.parse(JSON.stringify(JEVOmnibus.DEFAULT_OMNIBUS));
+  let graphCtrl = null;
+  let activeNode = null;
+
+  function switchMenu(idx) {
+    document.getElementById('tab-menu1').classList.toggle('active', idx === 1);
+    document.getElementById('tab-menu2').classList.toggle('active', idx === 2);
+    document.getElementById('view-menu1').classList.toggle('active', idx === 1);
+    document.getElementById('view-menu2').classList.toggle('active', idx === 2);
+    if (idx === 2 && graphCtrl) {
+      setTimeout(() => graphCtrl.resize(), 60);
+    }
+  }
+
+  function renderStrictFinancials() {
+    const f = state.financial_strict_strings;
+    document.getElementById('fin-risk').textContent = f.annual_risk_exposure_usd;
+    document.getElementById('fin-save').textContent = f.projected_savings_usd;
+    document.getElementById('fin-cost-jev').textContent = f.jev_1m_calls_cost_usd;
+    document.getElementById('fin-cost-sota').textContent = f.sota_1m_calls_cost_usd;
+    document.getElementById('fin-badge').textContent = 'FORMULA: ' + f.ledger_invariant_formula;
+  }
+
+  function recalcRung() {
+    const res = JEVOmnibus.evaluateJevTradingRung({
+      toxic_flow_score: document.getElementById('j-toxic').value,
+      liquidity_regime: document.getElementById('j-liquidity').value,
+      quote_stability: document.getElementById('j-quote').value,
+      inventory_skew: document.getElementById('j-inventory').value,
+      execution_health: document.getElementById('j-exec').value,
+      hard_risk_cap_breached: document.getElementById('j-breach').value === 'true'
+    });
+
+    const badge = document.getElementById('rung-badge');
+    badge.textContent = 'RUNG: ' + res.rung.toUpperCase();
+    badge.className = 'badge ' + (res.rung === 'kill' ? 'badge-failed' : (res.rung === 'normal' ? 'badge-done' : 'badge-ask'));
+
+    document.getElementById('rung-output').textContent = JSON.stringify(res, null, 2);
+  }
+
+  function renderAgentZones() {
+    const list = document.getElementById('agent-zones-list');
+    list.innerHTML = '';
+    const zones = state.agents_workflows ? state.agents_workflows.workspace_agents : [];
+    zones.forEach(z => {
+      const row = document.createElement('div');
+      row.className = 'io-row';
+      row.innerHTML = `
+        <div class="io-left">
+          <strong style="color:var(--text);">${z.name} <span style="color:var(--muted); font-size:10.5px;">(${z.zone})</span></strong>
+          <span class="io-meta">${z.mission}</span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span class="io-meta">Read-Only Diode</span>
+          <span class="badge badge-done">${z.status.toUpperCase()}</span>
+        </div>
+      `;
+      row.onclick = () => {
+        switchMenu(2);
+        if (graphCtrl && z.vault_note) {
+          graphCtrl.selectNode(z.vault_note);
+        }
+      };
+      list.appendChild(row);
+    });
+  }
+
+  function renderInboxOutbox() {
+    const list = document.getElementById('diode-stream-list');
+    list.innerHTML = '';
+    const io = state.inbox_outbox || [];
+    io.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'io-row';
+      const isOut = item.direction === 'outbox';
+      row.innerHTML = `
+        <div class="io-left">
+          <strong style="color:${isOut ? 'var(--amber)' : 'var(--cyan)'};">[${item.direction.toUpperCase()}] ${item.title}</strong>
+          <span class="io-meta">${item.summary || item.payload_preview || ''}</span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span class="io-meta">${item.id}</span>
+          <span class="badge badge-${item.status === 'staged' || item.status === 'processed' ? 'done' : 'ask'}">${item.status.toUpperCase()}</span>
+        </div>
+      `;
+      row.onclick = () => {
+        if (item.linked_node) {
+          switchMenu(2);
+          if (graphCtrl) graphCtrl.selectNode(item.linked_node);
+        }
+      };
+      list.appendChild(row);
+    });
+  }
+
+  function inspectNode(node) {
+    if (!node) return;
+    activeNode = node;
+    document.getElementById('insp-title').textContent = node.id;
+    document.getElementById('insp-ring').textContent = 'Ring ' + node.ring;
+    document.getElementById('insp-path').textContent = node.path || (node.id + '.md');
+    document.getElementById('insp-summary').textContent = node.summary || 'Core node in Second Brain hierarchy.';
+
+    const reqBox = document.getElementById('insp-requires');
+    reqBox.innerHTML = '';
+    (node.requires || []).forEach(r => {
+      const c = document.createElement('span');
+      c.className = 'dep-chip';
+      c.textContent = '← ' + r;
+      c.onclick = () => graphCtrl.selectNode(r);
+      reqBox.appendChild(c);
+    });
+    if (!(node.requires || []).length) reqBox.innerHTML = '<span class="io-meta">None (Root Seed)</span>';
+
+    const provBox = document.getElementById('insp-provides');
+    provBox.innerHTML = '';
+    (node.provides || []).forEach(p => {
+      const c = document.createElement('span');
+      c.className = 'dep-chip';
+      c.textContent = '→ ' + p;
+      c.onclick = () => graphCtrl.selectNode(p);
+      provBox.appendChild(c);
+    });
+    if (!(node.provides || []).length) provBox.innerHTML = '<span class="io-meta">Leaf Node</span>';
+  }
+
+  function setGraphMode(mode) {
+    if (graphCtrl) graphCtrl.setMode(mode);
+    document.getElementById('mode-ring2d').classList.toggle('btn-primary', mode === 'ring2d');
+    document.getElementById('mode-orbital3d').classList.toggle('btn-primary', mode === 'orbital3d');
+  }
+
+  function filterGraphRing(ringVal) {
+    if (!graphCtrl) return;
+    if (ringVal === 'all') graphCtrl.setRingFilter(null);
+    else graphCtrl.setRingFilter(parseInt(ringVal, 10));
+  }
+
+  function searchGraph(q) {
+    if (graphCtrl) graphCtrl.search(q);
+  }
+
+  function queryNodeInAssistant() {
+    if (!activeNode) return;
+    const q = 'Tell me about the requirements and purpose of note: ' + activeNode.id;
+    runQuickPrompt(q);
+  }
+
+  function triggerProbe() {
+    const btn = document.getElementById('btn-probe');
+    btn.textContent = 'Probing...';
+    fetch('/api/hermes/probe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ allow_simulation: false })
+    }).then(r => r.json()).then(d => {
+      btn.textContent = '⚡ Probe Hermes';
+      appendAssistantLog('HERMES PROBE VERDICT', JSON.stringify(d, null, 2));
+      document.getElementById('pill-hermes').textContent = d.status === 'ok' ? 'HERMES :8080 [PASS]' : 'HERMES [WARN]';
+    }).catch(err => {
+      btn.textContent = '⚡ Probe Hermes';
+      appendAssistantLog('HERMES PROBE ERROR', err.message);
+    });
+  }
+
+  function appendAssistantLog(sender, text) {
+    const log = document.getElementById('chat-log');
+    const div = document.createElement('div');
+    div.className = 'msg' + (sender === 'YOU' ? ' user' : '');
+    const head = document.createElement('div');
+    head.style.fontFamily = 'var(--mono)';
+    head.style.fontSize = '10.5px';
+    head.style.fontWeight = '700';
+    head.style.color = sender === 'YOU' ? 'var(--cyan)' : 'var(--green)';
+    head.style.marginBottom = '4px';
+    head.textContent = sender;
+    const body = document.createElement('div');
+    body.textContent = text;
+    div.append(head, body);
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function runQuickPrompt(q) {
+    document.getElementById('chat-input').value = q;
+    sendAssistantQuery();
+  }
+
+  function sendAssistantQuery() {
+    const input = document.getElementById('chat-input');
+    const q = input.value.trim();
+    if (!q) return;
+    input.value = '';
+    appendAssistantLog('YOU', q);
+
+    const res = JEVOmnibus.queryOmniscientAssistant(q, state);
+    const badge = document.getElementById('assist-outcome-badge');
+    badge.textContent = 'OUTCOME: ' + res.outcome.toUpperCase();
+    badge.className = 'badge badge-' + (res.outcome === 'done' ? 'done' : 'failed');
+
+    appendAssistantLog(
+      `OMNISCIENT BROKER [outcome=${res.outcome} | route=${res.triage.answers.route.choice}]`,
+      res.reply + '\n\nCitations:\n- ' + res.citations.join('\n- ')
+    );
+
+    if (graphCtrl && res.matchedNodes && res.matchedNodes.length) {
+      graphCtrl.highlightSet(res.matchedNodes);
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    renderStrictFinancials();
+    renderInboxOutbox();
+    renderAgentZones();
+    recalcRung();
+
+    const canvas = document.getElementById('obsidian-canvas');
+    graphCtrl = JEVOmnibus.createObsidianGraphController(canvas, {
+      mode: 'ring2d',
+      onSelectNode: inspectNode
+    });
+    graphCtrl.setData(state.second_brain);
+
+    appendAssistantLog(
+      'OMNISCIENT BROKER [outcome=done]',
+      'Connected to Second Brain (28 nodes across 4 rings, incl. Jev Market Judgment), JEV Workspace (5 Capability Zones, Inbox/Outbox Diode), and Mark LVI Stack.\nAsk any question or click a quick-probe below.'
+    );
+  });
+</script>
+</body>
+</html>

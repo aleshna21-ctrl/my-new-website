@@ -25,6 +25,7 @@
       <button class="btn sm" type="button" data-drawer="calendar" id="trig-calendar">📅 Calendar <span class="tag info" id="trig-cal-meta"></span></button>
       <button class="btn sm" type="button" data-drawer="tracker" id="trig-tracker">📋 Tracker <span class="tag" id="trig-trk-meta"></span></button>
       <button class="btn sm" type="button" data-drawer="quarantine" id="trig-quarantine">⚠️ Quarantine <span class="tag warn" id="trig-quar-meta"></span></button>
+      <button class="btn sm" type="button" data-drawer="gateway" id="trig-gateway">⚡ Gateway <span class="tag ok" id="trig-gw-meta">ONLINE</span></button>
     </div>
     <span class="pill" id="stream-pill" title="Telemetry stream (Server-Sent Events from /api/os/stream)"><i class="led"></i><span id="stream-text">CONNECTING</span></span>
     <span class="pill mono muted" id="frame-meta">no frame yet</span>
@@ -489,6 +490,202 @@
   </div>
 </section>
 
+<!-- SECONDARY WIDGET 4: HERMES TWO-WAY API GATEWAY (HIDDEN UNTIL CLICKED) -->
+<section class="widget-drawer" id="drawer-gateway" role="dialog" aria-modal="true" aria-labelledby="gw-drawer-title" hidden>
+  <header class="sheet-h">
+    <div class="quar-header-left">
+      <h2 id="gw-drawer-title">⚡ Hermes Two-Way API Gateway</h2>
+      <span class="tag ok" id="gw-badge-status">HMAC-SHA256 SECURED</span>
+      <span class="tag info" id="gw-badge-protocol">JSON-RPC 2.0</span>
+    </div>
+    <div class="quar-header-actions">
+      <button class="btn sm" type="button" id="gw-btn-refresh" title="Refresh Gateway Status">↻ Refresh</button>
+      <button class="btn ghost sm" type="button" data-close-drawer aria-label="Close gateway drawer">✕</button>
+    </div>
+  </header>
+  <div class="sheet-body" id="gw-drawer-body">
+    <!-- Protocol Specification & Security Banner -->
+    <div class="quar-status-banner">
+      <div class="quar-banner-top">
+        <span class="quar-banner-title">Gateway Protocol Specification:</span>
+        <span class="mono bold">JSON-RPC 2.0 / REST Webhook · HMAC-SHA256 Token Signature</span>
+        <span class="chip-badge ok" id="gw-chip-auth">REPLAY PROTECTED</span>
+      </div>
+      <p class="quar-banner-sub muted">
+        Two-way authenticated bridge between AIOS Dashboard (:5050) and Hermes Service (:8080).
+        Replay defense enforces 300s clock skew threshold and unique single-use nonces.
+        Enables task commands, Kanban board mutations, and recurring cron job management.
+      </p>
+    </div>
+
+    <!-- Gateway Navigation Tabs -->
+    <div class="gw-tabs" role="tablist">
+      <button type="button" class="gw-tab-btn active" data-gw-tab="tasks" id="gw-tab-tasks">Tasks &amp; Commands</button>
+      <button type="button" class="gw-tab-btn" data-gw-tab="board" id="gw-tab-board">Kanban Management</button>
+      <button type="button" class="gw-tab-btn" data-gw-tab="crons" id="gw-tab-crons">Cron Job Schedules</button>
+    </div>
+
+    <!-- Tab 1: Task Commands & Execution -->
+    <div class="gw-tab-panel" id="gw-panel-tasks">
+      <div class="quar-edit-card">
+        <div class="quar-edit-header">
+          <h4>Dispatch Task Command to Hermes</h4>
+          <span class="mono sm-txt muted" id="gw-dispatch-status">Ready</span>
+        </div>
+        <form id="gw-task-form">
+          <div class="form-row-3">
+            <label>Command Type:
+              <select id="gw-task-cmd" class="gw-select">
+                <option value="ping">Ping &amp; Health Handshake</option>
+                <option value="model_inference">Model Inference (Hermes Qwen3:4b)</option>
+                <option value="audit_invariants">Audit Zero-Loss Invariant</option>
+                <option value="sync_board_tasks">Sync Board Tasks to Hermes</option>
+                <option value="second_brain_scan">Rescan Second Brain Graph</option>
+                <option value="custom">Custom Command</option>
+              </select>
+            </label>
+            <label>Execution Mode:
+              <select id="gw-task-remote" class="gw-select">
+                <option value="true">Remote Hermes (:8080 Signed RPC)</option>
+                <option value="false">Local Host Gateway</option>
+              </select>
+            </label>
+            <label>Prompt / Parameters:
+              <input type="text" id="gw-task-prompt" class="mono" placeholder="e.g. State operational status">
+            </label>
+          </div>
+          <div class="quar-form-actions">
+            <button class="btn go sm" type="submit" id="gw-btn-dispatch">▶ Dispatch Task Command</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="quar-toolbar">
+        <span class="mono bold sm-txt">Recent Task Executions:</span>
+        <span class="mono sm-txt muted" id="gw-tasks-count">0 tasks recorded</span>
+      </div>
+      <div class="quar-table-wrap">
+        <table class="quar-table" id="gw-tasks-table">
+          <thead>
+            <tr>
+              <th class="th-gw-id">Task ID</th>
+              <th class="th-gw-cmd">Command</th>
+              <th class="th-gw-status">Status</th>
+              <th class="th-gw-dur">Latency</th>
+              <th class="th-gw-time">Executed At</th>
+              <th class="th-gw-out">Outcome / Result</th>
+            </tr>
+          </thead>
+          <tbody id="gw-tasks-tbody">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 2: Kanban Board Management -->
+    <div class="gw-tab-panel" id="gw-panel-board" hidden>
+      <div class="quar-toolbar">
+        <button class="btn go sm" type="button" id="gw-btn-sync-board">⚡ Sync Board with Hermes</button>
+        <button class="btn sm" type="button" id="gw-btn-push-vital">⚡ Push Vital Tasks to Hermes</button>
+        <span class="mono sm-txt muted" id="gw-board-sync-msg">Hermes &amp; AIOS board in sync.</span>
+      </div>
+      <div class="gw-metrics-grid">
+        <div class="gw-metric-card">
+          <span class="muted sm-txt">Total Tasks</span>
+          <span class="mono bold gw-metric-val" id="gw-stat-total">0</span>
+        </div>
+        <div class="gw-metric-card">
+          <span class="muted sm-txt">Active (Todo/Doing)</span>
+          <span class="mono bold gw-metric-val" id="gw-stat-active">0</span>
+        </div>
+        <div class="gw-metric-card">
+          <span class="muted sm-txt">Vital Priorities</span>
+          <span class="mono bold gw-metric-val" id="gw-stat-vital">0</span>
+        </div>
+        <div class="gw-metric-card">
+          <span class="muted sm-txt">Board Revision</span>
+          <span class="mono bold gw-metric-val" id="gw-stat-rev">0</span>
+        </div>
+      </div>
+      <div class="quar-table-wrap">
+        <table class="quar-table" id="gw-board-table">
+          <thead>
+            <tr>
+              <th class="th-row">Priority</th>
+              <th class="th-inv">Task Title</th>
+              <th class="th-status">Status</th>
+              <th class="th-date">Due</th>
+              <th class="th-act">Action</th>
+            </tr>
+          </thead>
+          <tbody id="gw-board-tbody">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 3: Cron Job Schedules -->
+    <div class="gw-tab-panel" id="gw-panel-crons" hidden>
+      <div class="quar-toolbar">
+        <button class="btn sm" type="button" id="gw-btn-add-cron-toggle">+ Add New Schedule</button>
+        <span class="mono sm-txt muted" id="gw-crons-msg">Active schedules are periodically evaluated by the gateway daemon.</span>
+      </div>
+
+      <!-- Add/Edit Cron Card -->
+      <div class="quar-edit-card" id="gw-cron-edit-card" hidden>
+        <div class="quar-edit-header">
+          <h4 id="gw-cron-form-title">Configure Cron Schedule</h4>
+          <button class="btn ghost sm" type="button" id="gw-cron-form-cancel">✕</button>
+        </div>
+        <form id="gw-cron-form">
+          <input type="hidden" id="gw-cron-id">
+          <div class="form-row-3">
+            <label>Job Name:
+              <input type="text" id="gw-cron-name" required class="mono" placeholder="e.g. Reconciliation Audit">
+            </label>
+            <label>Cron Expression (5-part):
+              <input type="text" id="gw-cron-expr" required class="mono" placeholder="*/15 * * * *">
+            </label>
+            <label>Target RPC Method:
+              <select id="gw-cron-method" class="gw-select">
+                <option value="hermes.task.execute">hermes.task.execute</option>
+                <option value="hermes.board.sync">hermes.board.sync</option>
+              </select>
+            </label>
+          </div>
+          <div class="gw-single-row">
+            <label>Description:
+              <input type="text" id="gw-cron-desc" class="mono" placeholder="Schedule description">
+            </label>
+          </div>
+          <div class="quar-form-actions">
+            <button class="btn go sm" type="submit">💾 Save Cron Schedule</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="quar-table-wrap">
+        <table class="quar-table" id="gw-crons-table">
+          <thead>
+            <tr>
+              <th class="th-inv">Job Name</th>
+              <th class="th-amt">Expression</th>
+              <th class="th-date">Last Run</th>
+              <th class="th-status">Last Outcome</th>
+              <th class="th-act">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="gw-crons-tbody">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- =============== SWIPE DOTS & PERSISTENT BOTTOM DOCK =============== -->
 <div class="dots" id="dots" aria-hidden="true">
   <button class="dot active" data-go="0" tabindex="-1"></button>
@@ -502,6 +699,7 @@
   <button class="dock-btn" type="button" data-drawer="calendar"><i>📅</i><span>Calendar</span></button>
   <button class="dock-btn" type="button" data-drawer="tracker"><i>📋</i><span>Tracker</span></button>
   <button class="dock-btn" type="button" data-drawer="quarantine"><i>⚠️</i><span>Quarantine</span><b class="badge warn" id="badge-quarantine" hidden></b></button>
+  <button class="dock-btn" type="button" data-drawer="gateway"><i>⚡</i><span>Gateway</span><b class="badge ok" id="badge-gateway" hidden></b></button>
   <button class="dock-btn" type="button" data-sheet="alerts"><i>⚠</i><span>Alerts</span><b class="badge warn" id="badge-alerts" hidden></b></button>
   <span class="dock-sep" aria-hidden="true"></span>
   <button class="dock-btn" type="button" data-go="0"><i>◈</i><span>Obsidian</span></button>
@@ -509,6 +707,7 @@
   <button class="dock-btn" type="button" data-sheet="editor"><i>⌨</i><span>Editor</span></button>
   <button class="dock-btn" type="button" data-sheet="docs"><i>☰</i><span>Docs</span></button>
 </nav>
+
 
 <div class="scrim" id="scrim" hidden></div>
 <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>

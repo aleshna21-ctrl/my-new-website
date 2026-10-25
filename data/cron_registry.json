@@ -1,0 +1,73 @@
+[
+  {
+    "id": "cron-backup-daily",
+    "name": "Daily VPS & Ledger Backup",
+    "expression": "15 3 * * *",
+    "description": "Automated snapshot archive of SQLite ledger, data fixtures, and vault stores at 03:15 UTC.",
+    "target_method": "hermes.task.execute",
+    "params": {
+      "command": "system_backup"
+    },
+    "enabled": true,
+    "last_run_utc": null,
+    "last_outcome": "pending",
+    "created_at": "2026-10-23T00:00:00Z"
+  },
+  {
+    "id": "cron-ledger-invariant",
+    "name": "Zero-Loss Ledger Invariant Audit",
+    "expression": "*/10 * * * *",
+    "description": "Periodic verification of zero-loss financial invariant: Received == Accepted + Quarantined + Duplicates.",
+    "target_method": "hermes.task.execute",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "enabled": true,
+    "last_run_utc": null,
+    "last_outcome": "pending",
+    "created_at": "2026-10-23T00:00:00Z"
+  },
+  {
+    "id": "cron-hermes-probe",
+    "name": "Hermes Loopback Health & Telemetry Probe",
+    "expression": "*/5 * * * *",
+    "description": "Probe 127.0.0.1:8080 model endpoint to verify local Ollama inference pipeline and latency.",
+    "target_method": "hermes.task.execute",
+    "params": {
+      "command": "model_inference",
+      "prompt": "ping"
+    },
+    "enabled": true,
+    "last_run_utc": null,
+    "last_outcome": "pending",
+    "created_at": "2026-10-23T00:00:00Z"
+  },
+  {
+    "id": "cron-gtm-sync",
+    "name": "Staged Outreach Outbox Review Sync",
+    "expression": "*/15 * * * *",
+    "description": "Scans staged outreach drafts queue and updates notification diode state.",
+    "target_method": "hermes.task.execute",
+    "params": {
+      "command": "gtm_sync"
+    },
+    "enabled": true,
+    "last_run_utc": null,
+    "last_outcome": "pending",
+    "created_at": "2026-10-23T00:00:00Z"
+  },
+  {
+    "id": "cron-board-health",
+    "name": "Kanban Vital Tasks Sweep",
+    "expression": "*/30 * * * *",
+    "description": "Evaluates vital tasks overdue dates and updates board schedule buffers.",
+    "target_method": "hermes.board.sync",
+    "params": {
+      "action": "check_vital"
+    },
+    "enabled": true,
+    "last_run_utc": null,
+    "last_outcome": "pending",
+    "created_at": "2026-10-23T00:00:00Z"
+  }
+]

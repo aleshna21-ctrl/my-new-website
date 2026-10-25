@@ -1954,3 +1954,96 @@ details.goal-item[open] > summary {
 .quar-actions-cell { text-align: right; }
 .quar-autofix-btn { margin-left: 6px; }
 .quar-reason-txt { margin-left: 8px; }
+
+/* ==================== TWO-WAY GATEWAY DRAWER ==================== */
+.gw-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 14px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+.gw-tab-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.gw-tab-btn:hover {
+  color: var(--text);
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+.gw-tab-btn.active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.gw-tab-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gw-select, .gw-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.gw-select:focus, .gw-input:focus {
+  border-color: var(--cyan);
+  outline: none;
+}
+
+.gw-single-row {
+  margin-top: 8px;
+}
+
+.gw-single-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.gw-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.gw-metric-card {
+  background: #090e18;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gw-metric-val {
+  font-size: 18px;
+  color: var(--cyan);
+}
+
+.th-gw-id { width: 130px; }
+.th-gw-cmd { width: 140px; }
+.th-gw-status { width: 95px; }
+.th-gw-dur { width: 85px; }
+.th-gw-time { width: 155px; }
+.th-gw-out { }
