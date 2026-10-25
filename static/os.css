@@ -1758,3 +1758,199 @@ details.goal-item[open] > summary {
   gap: 6px;
   margin-top: 8px;
 }
+
+/* ==================== QUARANTINE DRAWER & AUTO-RECOVERY ==================== */
+.quar-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.quar-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quar-status-banner {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+
+.quar-status-banner.pass {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.quar-banner-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quar-banner-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.quar-status-banner.pass .quar-banner-title {
+  color: var(--green);
+}
+
+.chip-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--amber);
+  color: #000;
+}
+
+.chip-badge.ok {
+  background: var(--green);
+  color: #000;
+}
+
+.quar-banner-sub {
+  margin: 6px 0 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.quar-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.quar-table-wrap {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  min-height: 220px;
+  max-height: 380px;
+}
+
+.quar-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.quar-table th {
+  position: sticky;
+  top: 0;
+  background: #090e18;
+  color: var(--muted);
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  z-index: 2;
+}
+
+.quar-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.quar-table tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.quar-table tr.row-quarantined {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.quar-table tr.row-duplicate {
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.bad-val {
+  color: #f87171 !important;
+  font-weight: 700;
+  text-decoration: underline dotted #ef4444;
+}
+
+.quar-edit-card {
+  margin-top: 12px;
+  background: #090e18;
+  border: 1px solid var(--cyan);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.quar-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.quar-edit-header h4 {
+  margin: 0;
+  font-size: 12px;
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+.form-row-3 label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.form-row-3 input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.form-row-3 input:focus {
+  border-color: var(--cyan);
+  outline: none;
+}
+
+.quar-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.th-row { width: 45px; }
+.th-inv { width: 140px; }
+.th-amt { width: 110px; }
+.th-date { width: 110px; }
+.th-status { }
+.th-act { width: 170px; text-align: right; }
+.quar-actions-cell { text-align: right; }
+.quar-autofix-btn { margin-left: 6px; }
+.quar-reason-txt { margin-left: 8px; }

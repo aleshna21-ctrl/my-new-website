@@ -209,13 +209,18 @@
     var scrim = $("drawer-scrim");
     var cal = $("drawer-calendar");
     var trk = $("drawer-tracker");
+    var quar = $("drawer-quarantine");
     if (cal) cal.setAttribute("hidden", "");
     if (trk) trk.setAttribute("hidden", "");
+    if (quar) quar.setAttribute("hidden", "");
     if (scrim) scrim.removeAttribute("hidden");
     if (drawerName === "calendar" && cal) {
       cal.removeAttribute("hidden");
     } else if (drawerName === "tracker" && trk) {
       trk.removeAttribute("hidden");
+    } else if (drawerName === "quarantine" && quar) {
+      quar.removeAttribute("hidden");
+      loadQuarantineDrawer();
     }
   }
 
@@ -223,9 +228,11 @@
     var scrim = $("drawer-scrim");
     var cal = $("drawer-calendar");
     var trk = $("drawer-tracker");
+    var quar = $("drawer-quarantine");
     if (scrim) scrim.setAttribute("hidden", "");
     if (cal) cal.setAttribute("hidden", "");
     if (trk) trk.setAttribute("hidden", "");
+    if (quar) quar.setAttribute("hidden", "");
   }
 
   function wireNavigation() {
@@ -976,7 +983,14 @@
   function renderBadges(counters) {
     setBadge("badge-inbox", counters.inbox || 0);
     setBadge("badge-outbox", (counters.outbox_review || 0) + (counters.notify_pending || 0));
+    setBadge("badge-quarantine", counters.quarantine || 0);
     setBadge("badge-alerts", counters.alerts_urgent || 0);
+
+    var qTrig = $("trig-quar-meta");
+    if (qTrig) {
+      qTrig.textContent = (counters.quarantine || 0) > 0 ? (counters.quarantine + " hold") : "clean";
+      qTrig.className = "tag " + ((counters.quarantine || 0) > 0 ? "warn" : "ok");
+    }
   }
 
   function setBadge(id, count) {
@@ -1027,6 +1041,7 @@
     var t = alert.target;
     if (t === "calendar") openDrawer("calendar");
     else if (t === "today") openDrawer("tracker");
+    else if (t === "quarantine") openDrawer("quarantine");
     else if (t === "outbox") openSheet("outbox");
     else if (t === "inbox") openSheet("inbox");
     else if (t === "flow") goToView(1);
@@ -1274,6 +1289,19 @@
           text: "↻ Rescan Vault",
           onClick: function () { executeCalibratedCommand("rescan-vault"); }
         }));
+      } else if (nodeId === "quarantine") {
+        sbActions.appendChild(h("button", {
+          className: "btn warn sm",
+          type: "button",
+          text: "⚠️ Open Quarantine Drawer",
+          onClick: function () { openDrawer("quarantine"); }
+        }));
+        sbActions.appendChild(h("button", {
+          className: "btn go sm",
+          type: "button",
+          text: "⚡ Auto-Recover All Rows",
+          onClick: function () { autoRecoverAllQuarantine(); }
+        }));
       } else if (nodeId === "aios" || nodeId === "cockpit") {
         sbActions.appendChild(h("button", {
           className: "btn sm",
@@ -1300,6 +1328,10 @@
     var v2Actions = h("div", { className: "node-actions-bar" });
     if (nodeId === "hermes") {
       v2Actions.appendChild(h("button", { className: "btn go sm", type: "button", text: "⚡ Run Hermes 8080 Probe", onClick: function () { executeCalibratedCommand("probe-8080"); } }));
+    } else if (nodeId === "quarantine") {
+      v2Actions.appendChild(h("button", { className: "btn warn sm", type: "button", text: "⚠️ Open Quarantine Drawer", onClick: function () { openDrawer("quarantine"); } }));
+      v2Actions.appendChild(h("button", { className: "btn go sm", type: "button", text: "⚡ Auto-Recover All Rows", onClick: function () { autoRecoverAllQuarantine(); } }));
+      v2Actions.appendChild(h("button", { className: "btn sm", type: "button", text: "↺ Reset Baseline", onClick: function () { resetQuarantineFixture(); } }));
     } else if (nodeId === "harness" || nodeId === "offline") {
       v2Actions.appendChild(h("button", { className: "btn ok sm", type: "button", text: "⚡ Cycle SQLite Ledger", onClick: function () { executeCalibratedCommand("cycle-ledger"); } }));
       v2Actions.appendChild(h("button", { className: "btn sm", type: "button", text: "📄 Cheap Read Fixture", onClick: function () { executeCalibratedCommand("cheap-read"); } }));
@@ -2596,12 +2628,266 @@
     if (targetId) loadDoc(targetId);
   }
 
+  // ==================== QUARANTINE DRAWER & AUTO-RECOVERY ====================
+  function loadQuarantineDrawer() {
+    var tbody = $("quar-table-body");
+    var liveMsg = $("quar-live-msg");
+    if (liveMsg) liveMsg.textContent = "Loading live quarantine rows from CSV...";
+
+    api("/api/quarantine").then(function (res) {
+      if (!res || !res.rows) {
+        if (liveMsg) liveMsg.textContent = "Failed to load quarantine data.";
+        return;
+      }
+
+      var metrics = res.metrics || {};
+      var inv = res.invariant || {};
+
+      var countTag = $("quar-badge-count");
+      if (countTag) {
+        countTag.textContent = (metrics.quarantined || 0) + " Quarantined";
+        countTag.className = "tag " + ((metrics.quarantined || 0) > 0 ? "warn" : "ok");
+      }
+
+      var invTag = $("quar-badge-invariant");
+      if (invTag) {
+        invTag.textContent = "Invariant: " + (inv.passed ? "PASS" : "BREACH");
+        invTag.className = "tag " + (inv.passed ? "ok" : "err");
+      }
+
+      var formulaTxt = $("quar-formula-txt");
+      if (formulaTxt) {
+        formulaTxt.textContent = inv.formula || (metrics.received + " == " + metrics.accepted + " + " + metrics.quarantined + " + " + metrics.duplicates);
+      }
+
+      var formulaBadge = $("quar-formula-badge");
+      var banner = $("quar-status-banner");
+      if (formulaBadge) {
+        formulaBadge.textContent = inv.passed ? "PASS" : "BREACH";
+        formulaBadge.className = "chip-badge " + (inv.passed ? "ok" : "err");
+      }
+      if (banner) {
+        banner.classList.toggle("pass", Boolean(inv.passed && !metrics.quarantined));
+      }
+
+      if (liveMsg) {
+        liveMsg.textContent = "Fixture: " + (res.fixture || "adversarial_fixture.csv") + " · " + metrics.received + " rows parsed.";
+      }
+
+      renderQuarantineTable(res.rows);
+    }).catch(function (err) {
+      if (liveMsg) liveMsg.textContent = "Error: " + err.message;
+    });
+  }
+
+  function renderQuarantineTable(rows) {
+    var tbody = $("quar-table-body");
+    if (!tbody) return;
+    clear(tbody);
+
+    if (!rows || !rows.length) {
+      var emptyTr = h("tr", {}, [
+        h("td", { colSpan: "6", className: "hint", text: "No rows found in fixture." })
+      ]);
+      tbody.appendChild(emptyTr);
+      return;
+    }
+
+    rows.forEach(function (r) {
+      var isQ = r.status === "quarantined";
+      var isDup = r.status === "duplicate";
+      var rowCls = isQ ? "row-quarantined" : (isDup ? "row-duplicate" : "");
+
+      var amtCls = "mono" + (r.is_malformed || isQ ? " bad-val" : "");
+      var statusTagCls = "tag " + (isQ ? "err" : (isDup ? "warn" : "ok"));
+
+      var actionsTd = h("td", { className: "quar-actions-cell" }, [
+        h("button", {
+          className: "btn sm",
+          type: "button",
+          text: "✏️ Edit",
+          title: "In-browser edit row",
+          onClick: function () { openQuarantineRowEditor(r); }
+        })
+      ]);
+
+      if (r.is_malformed || isQ) {
+        actionsTd.appendChild(h("button", {
+          className: "btn go sm quar-autofix-btn",
+          type: "button",
+          text: "⚡ Auto-Fix",
+          title: "Auto-fix penny fraction or negative sign",
+          onClick: function () { autoFixSingleRow(r.row_idx); }
+        }));
+      }
+
+      var tr = h("tr", { className: rowCls }, [
+        h("td", { className: "mono muted", text: String(r.row_idx) }),
+        h("td", { className: "mono", text: r.invoice_id }),
+        h("td", { className: amtCls, text: r.amount }),
+        h("td", { className: "mono muted", text: r.date || "—" }),
+        h("td", {}, [
+          h("span", { className: statusTagCls, text: r.status.toUpperCase() }),
+          r.reason ? h("span", { className: "muted sm-txt quar-reason-txt", text: r.reason }) : null
+        ]),
+        actionsTd
+      ]);
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function openQuarantineRowEditor(row) {
+    var card = $("quar-edit-card");
+    if (!card) return;
+    $("quar-edit-row-idx").textContent = row.row_idx;
+    $("quar-form-row").value = row.row_idx;
+    $("quar-form-invoice").value = row.invoice_id;
+    $("quar-form-amount").value = row.amount;
+    $("quar-form-date").value = row.date;
+    card.removeAttribute("hidden");
+    card.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function autoFixSingleRow(rowIdx) {
+    var liveMsg = $("quar-live-msg");
+    if (liveMsg) liveMsg.textContent = "Auto-recovering Row " + rowIdx + "...";
+
+    api("/api/quarantine/repair", {
+      method: "POST",
+      body: { row_idx: rowIdx, auto_recover: true }
+    }).then(function (res) {
+      if (res && res.status === "ok") {
+        toast("Row " + rowIdx + " successfully repaired!");
+        loadQuarantineDrawer();
+      } else {
+        toast("Failed: " + (res.error || "Unknown error"));
+      }
+    }).catch(function (err) {
+      toast("Error: " + err.message);
+    });
+  }
+
+  function autoRecoverAllQuarantine() {
+    var liveMsg = $("quar-live-msg");
+    if (liveMsg) liveMsg.textContent = "Auto-recovering all malformed penny rows...";
+
+    api("/api/quarantine/repair", {
+      method: "POST",
+      body: { auto_recover_all: true }
+    }).then(function (res) {
+      if (res && res.status === "ok") {
+        toast("All malformed rows auto-recovered and re-parsed!");
+        loadQuarantineDrawer();
+      } else {
+        toast("Failed: " + (res.error || "Unknown error"));
+      }
+    }).catch(function (err) {
+      toast("Error: " + err.message);
+    });
+  }
+
+  function resetQuarantineFixture() {
+    var liveMsg = $("quar-live-msg");
+    if (liveMsg) liveMsg.textContent = "Resetting fixture to baseline test state...";
+
+    api("/api/quarantine/reset", { method: "POST" }).then(function (res) {
+      toast("Fixture reset to baseline state.");
+      loadQuarantineDrawer();
+    }).catch(function (err) {
+      toast("Reset error: " + err.message);
+    });
+  }
+
+  function wireQuarantineDrawer() {
+    var btnReparse = $("quar-btn-reparse");
+    if (btnReparse) {
+      btnReparse.addEventListener("click", function () {
+        loadQuarantineDrawer();
+      });
+    }
+
+    var btnAutoRecoverAll = $("quar-btn-autorecover-all");
+    if (btnAutoRecoverAll) {
+      btnAutoRecoverAll.addEventListener("click", function () {
+        autoRecoverAllQuarantine();
+      });
+    }
+
+    var btnReset = $("quar-btn-reset-fixture");
+    if (btnReset) {
+      btnReset.addEventListener("click", function () {
+        resetQuarantineFixture();
+      });
+    }
+
+    var btnCancel = $("quar-edit-cancel");
+    if (btnCancel) {
+      btnCancel.addEventListener("click", function () {
+        var card = $("quar-edit-card");
+        if (card) card.setAttribute("hidden", "");
+      });
+    }
+
+    var btnAutoFixPenny = $("quar-form-auto-fix");
+    if (btnAutoFixPenny) {
+      btnAutoFixPenny.addEventListener("click", function () {
+        var amtInput = $("quar-form-amount");
+        if (!amtInput) return;
+        var val = amtInput.value.trim().replace(/^-+/, "");
+        var parts = val.split(".");
+        if (parts.length === 2) {
+          var dec = (parts[1] + "00").slice(0, 2);
+          amtInput.value = (parts[0] || "0") + "." + dec;
+        } else if (parts.length === 1 && parts[0]) {
+          amtInput.value = parts[0] + ".00";
+        }
+      });
+    }
+
+    var editForm = $("quar-edit-form");
+    if (editForm) {
+      editForm.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var rowIdx = Number($("quar-form-row").value || "0");
+        var invoiceId = $("quar-form-invoice").value.trim();
+        var amount = $("quar-form-amount").value.trim();
+        var dateVal = $("quar-form-date").value.trim();
+
+        var card = $("quar-edit-card");
+        var liveMsg = $("quar-live-msg");
+        if (liveMsg) liveMsg.textContent = "Saving Row " + rowIdx + " and re-parsing CSV...";
+
+        api("/api/quarantine/repair", {
+          method: "POST",
+          body: {
+            row_idx: rowIdx,
+            invoice_id: invoiceId,
+            amount: amount,
+            date: dateVal
+          }
+        }).then(function (res) {
+          if (res && res.status === "ok") {
+            toast("Row " + rowIdx + " saved & re-parsed!");
+            if (card) card.setAttribute("hidden", "");
+            loadQuarantineDrawer();
+          } else {
+            toast("Save failed: " + (res.error || "Unknown error"));
+          }
+        }).catch(function (err) {
+          toast("Save error: " + err.message);
+        });
+      });
+    }
+  }
+
   // ==================== BOOTSTRAP ====================
   document.addEventListener("DOMContentLoaded", function () {
     wireNavigation();
     wireBoardForms();
     wireObsidianWidget();
     wireSystemsView();
+    wireQuarantineDrawer();
     updateClock();
     setInterval(updateClock, 1000);
     loadBoard();

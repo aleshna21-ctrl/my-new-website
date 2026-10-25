@@ -24,6 +24,7 @@
     <div class="widget-triggers" aria-label="Secondary widgets (hidden until clicked)">
       <button class="btn sm" type="button" data-drawer="calendar" id="trig-calendar">📅 Calendar <span class="tag info" id="trig-cal-meta"></span></button>
       <button class="btn sm" type="button" data-drawer="tracker" id="trig-tracker">📋 Tracker <span class="tag" id="trig-trk-meta"></span></button>
+      <button class="btn sm" type="button" data-drawer="quarantine" id="trig-quarantine">⚠️ Quarantine <span class="tag warn" id="trig-quar-meta"></span></button>
     </div>
     <span class="pill" id="stream-pill" title="Telemetry stream (Server-Sent Events from /api/os/stream)"><i class="led"></i><span id="stream-text">CONNECTING</span></span>
     <span class="pill mono muted" id="frame-meta">no frame yet</span>
@@ -407,6 +408,87 @@
   </div>
 </section>
 
+<!-- SECONDARY WIDGET 3: QUARANTINE DRAWER & AUTO-RECOVERY (HIDDEN UNTIL CLICKED) -->
+<section class="widget-drawer" id="drawer-quarantine" role="dialog" aria-modal="true" aria-labelledby="quar-drawer-title" hidden>
+  <header class="sheet-h">
+    <div class="quar-header-left">
+      <h2 id="quar-drawer-title">⚠️ Quarantine Drawer &amp; Auto-Recovery</h2>
+      <span class="tag warn" id="quar-badge-count">1 Quarantined</span>
+      <span class="tag ok" id="quar-badge-invariant">Invariant: OK</span>
+    </div>
+    <div class="quar-header-actions">
+      <button class="btn sm" type="button" id="quar-btn-reparse" title="Re-parse CSV from disk">↻ Re-parse</button>
+      <button class="btn ghost sm" type="button" data-close-drawer aria-label="Close quarantine drawer">✕</button>
+    </div>
+  </header>
+  <div class="sheet-body" id="quar-drawer-body">
+    <!-- Status / Invariant Banner -->
+    <div class="quar-status-banner">
+      <div class="quar-banner-top">
+        <span class="quar-banner-title">Zero-Loss Ledger Invariant:</span>
+        <span class="mono bold" id="quar-formula-txt">Received == Accepted + Quarantined + Duplicates</span>
+        <span class="chip-badge" id="quar-formula-badge">PASS</span>
+      </div>
+      <p class="quar-banner-sub muted">
+        StrictStr money governance prevents malformed penny fractions, negative invoices, and duplicates from posting to downstream AP.
+        Operators can edit, auto-recover, and re-parse rows in-browser.
+      </p>
+    </div>
+
+    <!-- Quick Auto-Recovery Toolbar -->
+    <div class="quar-toolbar">
+      <button class="btn go sm" type="button" id="quar-btn-autorecover-all">⚡ Auto-Recover Malformed Rows</button>
+      <button class="btn ghost sm" type="button" id="quar-btn-reset-fixture" title="Restore original fixture for test alignment">↺ Reset Baseline</button>
+      <span class="mono sm-txt muted" id="quar-live-msg">Ready for operator action.</span>
+    </div>
+
+    <!-- Quarantine Rows Table -->
+    <div class="quar-table-wrap">
+      <table class="quar-table" id="quar-table">
+        <thead>
+          <tr>
+            <th class="th-row">Row</th>
+            <th class="th-inv">Invoice ID</th>
+            <th class="th-amt">Amount</th>
+            <th class="th-date">Date</th>
+            <th class="th-status">Status / Invariant Audit</th>
+            <th class="th-act">Action</th>
+          </tr>
+        </thead>
+        <tbody id="quar-table-body">
+          <!-- Populated dynamically by os.js -->
+        </tbody>
+      </table>
+    </div>
+
+    <!-- In-Line Edit Modal / Panel -->
+    <div class="quar-edit-card" id="quar-edit-card" hidden>
+      <div class="quar-edit-header">
+        <h4>Operator Edit: Row <span id="quar-edit-row-idx"></span></h4>
+        <button class="btn ghost sm" type="button" id="quar-edit-cancel">✕</button>
+      </div>
+      <form id="quar-edit-form" class="quar-edit-form">
+        <input type="hidden" id="quar-form-row">
+        <div class="form-row-3">
+          <label>Invoice ID:
+            <input type="text" id="quar-form-invoice" required class="mono">
+          </label>
+          <label>Amount (StrictStr):
+            <input type="text" id="quar-form-amount" required class="mono" placeholder="e.g. 999.99">
+          </label>
+          <label>Date:
+            <input type="date" id="quar-form-date" required class="mono">
+          </label>
+        </div>
+        <div class="quar-form-actions">
+          <button class="btn sm" type="button" id="quar-form-auto-fix">⚡ Clean Penny Value</button>
+          <button class="btn go sm" type="submit">💾 Save &amp; Re-parse CSV</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
 <!-- =============== SWIPE DOTS & PERSISTENT BOTTOM DOCK =============== -->
 <div class="dots" id="dots" aria-hidden="true">
   <button class="dot active" data-go="0" tabindex="-1"></button>
@@ -419,6 +501,7 @@
   <button class="dock-btn" type="button" data-sheet="outbox"><i>⇡</i><span>Outbox</span><b class="badge" id="badge-outbox" hidden></b></button>
   <button class="dock-btn" type="button" data-drawer="calendar"><i>📅</i><span>Calendar</span></button>
   <button class="dock-btn" type="button" data-drawer="tracker"><i>📋</i><span>Tracker</span></button>
+  <button class="dock-btn" type="button" data-drawer="quarantine"><i>⚠️</i><span>Quarantine</span><b class="badge warn" id="badge-quarantine" hidden></b></button>
   <button class="dock-btn" type="button" data-sheet="alerts"><i>⚠</i><span>Alerts</span><b class="badge warn" id="badge-alerts" hidden></b></button>
   <span class="dock-sep" aria-hidden="true"></span>
   <button class="dock-btn" type="button" data-go="0"><i>◈</i><span>Obsidian</span></button>
