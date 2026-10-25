@@ -31,7 +31,7 @@ RUN mkdir -p /app/data /app/scratch /app/state /app/calendar /app/vault /app/inb
     chown -R aios:aios /app
 
 # Copy application source code with non-root ownership
-COPY --chown=aios:aios hud_server.py app.py ./
+COPY --chown=aios:aios hud_server.py app.py index.html package.json ./
 COPY --chown=aios:aios hud/ ./hud/
 COPY --chown=aios:aios static/ ./static/
 COPY --chown=aios:aios config/ ./config/
