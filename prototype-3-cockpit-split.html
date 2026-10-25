@@ -15,6 +15,7 @@
     --text: #f8fafc;
     --muted: #94a3b8;
     --cyan: #06b6d4;
+    --cyan-bright: #38bdf8;
     --gold: #f59e0b;
     --emerald: #10b981;
     --crimson: #ef4444;
@@ -185,6 +186,20 @@
   .btn-c.go:hover { background: rgba(16,185,129,0.15); }
   .btn-c.e2e-btn { border-color: var(--gold); color: var(--gold); font-weight: 700; }
   .btn-c.e2e-btn:hover { background: rgba(245,158,11,0.15); }
+
+  /* Gateway Console Card */
+  .gw-console {
+    background: #04060c;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: #cbd5e1;
+    max-height: 120px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
 </style>
 </head>
 <body>
@@ -238,11 +253,26 @@
         <div id="c3-io-combined" style="display:flex; flex-direction:column; gap:6px;"></div>
       </div>
 
+      <!-- Two-Way Authenticated Gateway Deck -->
+      <div class="sub-card" style="border-color:rgba(56,189,248,0.35);">
+        <div style="display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:11px;">
+          <strong style="color:var(--cyan-bright);">⚡ TWO-WAY API GATEWAY (HMAC-SHA256)</strong>
+          <span class="tag done" id="c3-gw-pill">REPLAY DEFENSE ACTIVE</span>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn-c" onclick="dispatchGatewayCmd('model_inference')">▶ Model Inference</button>
+          <button class="btn-c" onclick="dispatchGatewayCmd('audit_invariants')">▶ Audit Invariants</button>
+          <button class="btn-c" onclick="dispatchGatewayCmd('sync_board_tasks')">▶ Sync Kanban</button>
+          <button class="btn-c" onclick="dispatchGatewayCmd('ping')">▶ Ping Hermes</button>
+        </div>
+        <div class="gw-console" id="gw-console-out">[Gateway Ready] Authenticated bridge between AIOS (:5050) and Hermes (:8080). Nonce cache and 300s skew protection enabled.</div>
+      </div>
+
       <!-- Capability Zones & Guardrails -->
       <div class="sub-card">
         <div style="display:flex; justify-content:space-between; align-items:center; font-family:var(--mono); font-size:11px;">
           <strong style="color:var(--cyan);">🛡️ 5 CAPABILITY ZONES &amp; LEVEL 1-10 GUARDRAILS</strong>
-          <span class="tag done">HMAC VERIFIED</span>
+          <span class="tag done">POLICY ENFORCED</span>
         </div>
         <div id="c3-agents-list" style="display:flex; flex-direction:column; gap:6px;"></div>
       </div>
@@ -453,6 +483,26 @@
     }).catch(err => {
       btn.textContent = '🚀 RUN E2E PIPELINE';
       c3Log('E2E RUN', 'Triggered asynchronous E2E pipeline run.');
+    });
+  }
+
+  function dispatchGatewayCmd(cmd) {
+    const outBox = document.getElementById('gw-console-out');
+    outBox.textContent = `[HMAC RPC] Dispatching '${cmd}' to Hermes via Gateway...`;
+    fetch('/api/gateway/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        command: cmd,
+        remote: true,
+        prompt: 'Prototype III Gateway execution'
+      })
+    }).then(r => r.json()).then(res => {
+      const summary = `[Task ${res.task_id || ''}] Status: ${res.status} | Latency: ${res.duration_ms != null ? res.duration_ms + 'ms' : 'n/a'}\nResult: ` + JSON.stringify(res.result || res.error || 'Done', null, 2);
+      outBox.textContent = summary;
+      c3Log('GATEWAY RPC', summary);
+    }).catch(err => {
+      outBox.textContent = '[Gateway Error] ' + err.message;
     });
   }
 
