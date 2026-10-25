@@ -21,11 +21,11 @@ SERVER_STARTED = time.time()
 OS_PAGE_CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
                "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'")
 
-ROOT_DIR = r"C:\Users\alesh\jev-workspace"
+HUD_DIR = os.environ.get("HUD_DIR", os.path.dirname(os.path.abspath(__file__)))
+ROOT_DIR = os.environ.get("JEV_PROJECT_ROOT", os.path.dirname(HUD_DIR))
 OFFLINE_DIR = os.path.join(ROOT_DIR, "delivery-offline")
 GTM_DIR = os.path.join(ROOT_DIR, "gtm-research")
 OUTBOX_DIR = os.path.join(ROOT_DIR, "notification-outbox")
-HUD_DIR = os.path.join(ROOT_DIR, "hud-interface")
 
 for p in (OFFLINE_DIR, GTM_DIR):
     if p not in sys.path:
