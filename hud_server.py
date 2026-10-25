@@ -116,6 +116,10 @@ def get_hermes_telemetry() -> dict:
 
 def get_offline_ledger_and_invariant() -> dict:
     db_path = os.path.join(OFFLINE_DIR, "job_ledger.db")
+    if not os.path.exists(db_path):
+        fallback_db = os.path.join(HUD_DIR, "data", "job_ledger.db")
+        if os.path.exists(fallback_db):
+            db_path = fallback_db
     jobs = []
     counts = {"queued": 0, "running": 0, "validated": 0, "approved": 0, "completed": 0, "quarantined": 0}
     if os.path.exists(db_path):
@@ -135,6 +139,10 @@ def get_offline_ledger_and_invariant() -> dict:
             pass
 
     csv_path = os.path.join(OFFLINE_DIR, "adversarial_fixture.csv")
+    if not os.path.exists(csv_path):
+        fallback_csv = os.path.join(HUD_DIR, "data", "adversarial_fixture.csv")
+        if os.path.exists(fallback_csv):
+            csv_path = fallback_csv
     metrics = {"received": 0, "accepted": 0, "quarantined": 0, "duplicates": 0}
     quarantined_rows = []
     if os.path.exists(csv_path):
@@ -171,6 +179,10 @@ def get_offline_ledger_and_invariant() -> dict:
 
 def get_gtm_queue() -> dict:
     stage_path = os.path.join(GTM_DIR, "staged_outreach.json")
+    if not os.path.exists(stage_path):
+        fallback_stage = os.path.join(HUD_DIR, "data", "staged_outreach.json")
+        if os.path.exists(fallback_stage):
+            stage_path = fallback_stage
     drafts = []
     if os.path.exists(stage_path):
         try:
@@ -188,7 +200,15 @@ def get_gtm_queue() -> dict:
 
 def get_alerts_status() -> dict:
     outbox_path = os.path.join(OUTBOX_DIR, "metadata_outbox.json")
+    if not os.path.exists(outbox_path):
+        fallback_outbox = os.path.join(HUD_DIR, "data", "metadata_outbox.json")
+        if os.path.exists(fallback_outbox):
+            outbox_path = fallback_outbox
     log_path = os.path.join(GTM_DIR, "alert_dispatch_log.json")
+    if not os.path.exists(log_path):
+        fallback_log = os.path.join(HUD_DIR, "data", "alert_dispatch_log.json")
+        if os.path.exists(fallback_log):
+            log_path = fallback_log
     outbox = []
     logs = []
     if os.path.exists(outbox_path):
@@ -742,6 +762,14 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
         elif self.path == "/api/jev-e2e/events":
             from hud.jev_e2e_pipeline import get_recent_e2e_events
             self._send_json(get_recent_e2e_events())
+        elif self.path == "/api/session":
+            self._send_json({"token": "local-session-token", "authenticated": True})
+        elif self.path == "/api/hud":
+            self._send_json({
+                "hermes": get_hermes_telemetry(),
+                "ledger": get_offline_ledger_and_invariant(),
+                "alerts": get_alerts_status()
+            })
         elif self.path in ("/prototype-1-ring-command.html", "/prototype-2-minimal-3d.html", "/prototype-3-cockpit-split.html", "/static/jev-omnibus.js"):
             fpath = os.path.join(HUD_DIR, self.path.lstrip("/"))
             if os.path.isfile(fpath):

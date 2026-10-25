@@ -1,0 +1,264 @@
+[
+  {
+    "id": "gtm_e2e_keystone_reconciliation",
+    "prospect_id": "gtm_e2e_keystone_reconciliation",
+    "company_name": "Keystone Precision Machining",
+    "company": "Keystone Precision Machining",
+    "vertical": "Precision CNC / JobBOSS Reconciliation",
+    "contact_name": "Brian Kelling",
+    "contact_title": "General Manager",
+    "contact_email": "purchasing@keystoneprecisioncnc.com",
+    "email": "purchasing@keystoneprecisioncnc.com",
+    "recipient_ref": "purchasing@keystoneprecisioncnc.com",
+    "subject": "Keystone Precision: Automated JobBOSS Batch Quarantine & Plater PO Audit (12-Row Sample Verification)",
+    "staged_email_subject": "Keystone Precision: Automated JobBOSS Batch Quarantine & Plater PO Audit (12-Row Sample Verification)",
+    "body": "Brian,\n\nFollowing our Statement of Work review for Keystone Precision Machining ($826,920.00 annual reconciliation exposure across 4,200 monthly JobBOSS and QuickBooks transactions), our offline reconciliation harness executed a zero-context Level 8 verification pass on the 12-row sample invoice batch.\n\nDeterministic Audit Findings (StrictStr Preserved):\n- Quarantined Negative/Fractional Invoice: INV-4459-QZJZ at -999.995 (2026-05-16)\n- Quarantined Duplicate InvoiceID: INV-2059-IYIG at 226.74 (2026-03-09, 2 occurrences)\n- Non-2-Decimal Scale Variances: INV-9783-WNNC (46) and INV-5960-WCJS (206.3)\n- Clean Verified Invoices: 8 of 12 accepted; 4 quarantined before AP ledger posting\n\nThis isolates the exact outside-processing plater invoice mismatches (~168 incidents/mo at $380.00 avg impact) before accounts payable issues payment. Would you like to review the quarantined exception packet for Milestone 1 sign-off?",
+    "staged_email_body": "Brian,\n\nFollowing our Statement of Work review for Keystone Precision Machining ($826,920.00 annual reconciliation exposure across 4,200 monthly JobBOSS and QuickBooks transactions), our offline reconciliation harness executed a zero-context Level 8 verification pass on the 12-row sample invoice batch.\n\nDeterministic Audit Findings (StrictStr Preserved):\n- Quarantined Negative/Fractional Invoice: INV-4459-QZJZ at -999.995 (2026-05-16)\n- Quarantined Duplicate InvoiceID: INV-2059-IYIG at 226.74 (2026-03-09, 2 occurrences)\n- Non-2-Decimal Scale Variances: INV-9783-WNNC (46) and INV-5960-WCJS (206.3)\n- Clean Verified Invoices: 8 of 12 accepted; 4 quarantined before AP ledger posting\n\nThis isolates the exact outside-processing plater invoice mismatches (~168 incidents/mo at $380.00 avg impact) before accounts payable issues payment. Would you like to review the quarantined exception packet for Milestone 1 sign-off?",
+    "supporting_fact_ids": [
+      "level8:adversarial_fixture.csv",
+      "level9:SOW_Keystone_Precision_Machining.md",
+      "level3:composite_0.924"
+    ],
+    "strict_financial_evidence": {
+      "quarantined_negative_invoice": "INV-4459-QZJZ",
+      "quarantined_negative_amount": "-999.995",
+      "duplicate_invoice_id": "INV-2059-IYIG",
+      "duplicate_invoice_amount": "226.74",
+      "non_two_decimal_samples": [
+        "46",
+        "206.3"
+      ],
+      "sow_annual_risk_exposure": "826920.00",
+      "sow_direct_leakage": "766080.00",
+      "sow_projected_net_savings": "702882.00",
+      "sow_avg_plater_discrepancy": "380.00"
+    },
+    "review_status": "needs_review",
+    "created_at_utc": "2026-10-24T03:17:51.606169+00:00",
+    "status": "needs_review"
+  },
+  {
+    "company_name": "Cambridge Specialty Company",
+    "recipient_ref": "ap-ar@cambridgespecialty.com",
+    "subject": "Reconciliation bottlenecks at Cambridge Specialty Company",
+    "body": "Hi,\n\nNoticed your team manages workflows where manual data reconciliation creates heavy friction around month-end close (JobBOSS balance checks and monthly GL reconciliations).\n\nWe build local-first pipelines that eliminate silent batch export failures. Worth a brief look?",
+    "supporting_fact_ids": [
+      "signal-01"
+    ],
+    "id": "gtm_001",
+    "prospect_id": "gtm_001",
+    "company": "Cambridge Specialty Company",
+    "email": "",
+    "contact_email": "",
+    "review_status": "needs_review",
+    "staged_email_subject": "Reconciliation bottlenecks at Cambridge Specialty Company",
+    "staged_email_body": "Hi,\n\nNoticed your team manages workflows where manual data reconciliation creates heavy friction around month-end close (JobBOSS balance checks and monthly GL reconciliations).\n\nWe build local-first pipelines that eliminate silent batch export failures. Worth a brief look?",
+    "vertical": "Precision Manufacturing / B2B",
+    "status": "approved",
+    "reviewed_at": "2026-10-23T02:49:57.945898+00:00",
+    "reviewed_by": "local-human",
+    "approval_hash": "63e22c0c75f5495e72787a645100c7d1a4fdee5b2fec96d0868946207c325c70"
+  },
+  {
+    "company_name": "VetPowered",
+    "recipient_ref": "ops@vetpowered.com",
+    "subject": "Reconciliation bottlenecks at VetPowered",
+    "body": "Hi,\n\nNoticed your team manages workflows where manual data reconciliation creates heavy friction around month-end close (purchase order, receipt, and WIP reconciliation discrepancies).\n\nWe build local-first pipelines that eliminate silent batch export failures. Worth a brief look?",
+    "supporting_fact_ids": [
+      "signal-01"
+    ],
+    "id": "gtm_002",
+    "prospect_id": "gtm_002",
+    "company": "VetPowered",
+    "email": "",
+    "contact_email": "",
+    "review_status": "needs_review",
+    "staged_email_subject": "Reconciliation bottlenecks at VetPowered",
+    "staged_email_body": "Hi,\n\nNoticed your team manages workflows where manual data reconciliation creates heavy friction around month-end close (purchase order, receipt, and WIP reconciliation discrepancies).\n\nWe build local-first pipelines that eliminate silent batch export failures. Worth a brief look?",
+    "vertical": "Precision Manufacturing / B2B",
+    "status": "approved",
+    "reviewed_at": "2026-10-23T03:26:57.679989+00:00",
+    "reviewed_by": "local-human",
+    "approval_hash": "06283400aa71ec026fb36f366e1b62a01cf9f3360ff59d16cbf0619d9696d9f0"
+  },
+  {
+    "prospect_id": "gtm_bbbf06f3",
+    "company_name": "Apex Thermal Solutions",
+    "vertical": "Commercial Refrigeration/HVAC",
+    "contact_name": "Marcus Vance",
+    "contact_title": "Vice President of Field Operations",
+    "contact_email": "ops-billing@apexthermalsolutions.com",
+    "pain_points": [
+      {
+        "category": "Warranty & Parts Credit Reconciliation",
+        "target_systems": [
+          "ServiceTitan",
+          "QuickBooks Enterprise"
+        ],
+        "discrepancy_pattern": "Emergency compressor replacements credited by OEM distributors at differing core values than field POs.",
+        "estimated_leakage_basis": "Unclaimed vendor core credits and mismatched supply house counter tickets"
+      }
+    ],
+    "custom_hook": "Reconciling 15+ technician van inventories and OEM core credits against ServiceTitan work orders before monthly close.",
+    "staged_email_subject": "Automating OEM parts credit & work order reconciliation for Apex Thermal",
+    "staged_email_body": "Marcus,\n\nIn multi-tech commercial refrigeration operations running ServiceTitan, emergency compressor and coil swap tickets frequently diverge from distributor credit memos—especially when core returns sit at supply houses unapplied.\n\nWe build deterministic financial reconciliation pipelines that automatically 3-way match field technician part requisitions, vendor counter receipts, and OEM credit statements. It flags core-credit leakage within 24 hours rather than during month-end audit cleanups.\n\nCould we run a sample batch of last month's supply house tickets against your open work orders to benchmark your credit capture?",
+    "review_status": "needs_review",
+    "created_at_utc": "2026-10-17T21:23:00.524613+00:00",
+    "id": "gtm_bbbf06f3",
+    "company": "Apex Thermal Solutions",
+    "email": "ops-billing@apexthermalsolutions.com",
+    "subject": "Automating OEM parts credit & work order reconciliation for Apex Thermal",
+    "body": "Marcus,\n\nIn multi-tech commercial refrigeration operations running ServiceTitan, emergency compressor and coil swap tickets frequently diverge from distributor credit memos—especially when core returns sit at supply houses unapplied.\n\nWe build deterministic financial reconciliation pipelines that automatically 3-way match field technician part requisitions, vendor counter receipts, and OEM credit statements. It flags core-credit leakage within 24 hours rather than during month-end audit cleanups.\n\nCould we run a sample batch of last month's supply house tickets against your open work orders to benchmark your credit capture?",
+    "status": "needs_review"
+  },
+  {
+    "prospect_id": "gtm_d0db6559",
+    "company_name": "ColdChain Mechanical",
+    "vertical": "Commercial Refrigeration/HVAC",
+    "contact_name": "Elena Rostova",
+    "contact_title": "Controller",
+    "contact_email": "ap@coldchainmechanical.com",
+    "pain_points": [
+      {
+        "category": "Subcontractor & Emergency Overtime Billing",
+        "target_systems": [
+          "Jonas Premier",
+          "Sage Intacct"
+        ],
+        "discrepancy_pattern": "Weekend supermarket emergency call-outs billed at overtime without corresponding customer billable rate adjustments.",
+        "estimated_leakage_basis": "Unbilled labor rate differentials and technician van stock slippage"
+      }
+    ],
+    "custom_hook": "Eliminating margin leakage between supermarket emergency dispatch overtime and Jonas job-costing ledgers.",
+    "staged_email_subject": "Reconciliation check: Jonas job costing vs. supply house invoices",
+    "staged_email_body": "Elena,\n\nWhen commercial refrigeration crews handle supermarket emergency line breaks over the weekend, parts pulled from consignment and overtime hours often hit Jonas after billing cycles have already generated client invoices.\n\nOur system runs an automated reconciliation harness that continuously flags unlinked supply-house invoices and unbilled technician hours before invoicing closes, preventing margin erosion on major accounts.\n\nAre you open to seeing how our automated audit ledger isolates unbilled emergency WIP before your next financial review?",
+    "review_status": "needs_review",
+    "created_at_utc": "2026-10-17T21:23:00.524613+00:00",
+    "id": "gtm_d0db6559",
+    "company": "ColdChain Mechanical",
+    "email": "ap@coldchainmechanical.com",
+    "subject": "Reconciliation check: Jonas job costing vs. supply house invoices",
+    "body": "Elena,\n\nWhen commercial refrigeration crews handle supermarket emergency line breaks over the weekend, parts pulled from consignment and overtime hours often hit Jonas after billing cycles have already generated client invoices.\n\nOur system runs an automated reconciliation harness that continuously flags unlinked supply-house invoices and unbilled technician hours before invoicing closes, preventing margin erosion on major accounts.\n\nAre you open to seeing how our automated audit ledger isolates unbilled emergency WIP before your next financial review?",
+    "status": "needs_review"
+  },
+  {
+    "prospect_id": "gtm_cae660eb",
+    "company_name": "Pacific Crest Global Logistics",
+    "vertical": "Maritime Freight/NVOCC",
+    "contact_name": "David Sterling",
+    "contact_title": "Director of Freight Accounting",
+    "contact_email": "disputes@pacificcrestlogistics.com",
+    "pain_points": [
+      {
+        "category": "Detention & Demurrage (D&D) Pass-Through Auditing",
+        "target_systems": [
+          "CargoWise One",
+          "SAP"
+        ],
+        "discrepancy_pattern": "Ocean carrier per-diem and demurrage invoices billed outside contractual free-time windows without carrier EDI gate-record verification.",
+        "estimated_leakage_basis": "Carrier accessorial overbilling and unrecovered drayage waiting time"
+      }
+    ],
+    "custom_hook": "Validating ocean carrier detention & demurrage penalty notices against port terminal gate EDI records in CargoWise.",
+    "staged_email_subject": "Automated D&D dispute verification for Pacific Crest shipments",
+    "staged_email_body": "David,\n\nAuditing ocean carrier detention and demurrage invoices against terminal gate timestamps and free-time agreements is notoriously time-consuming when managed across email chains and CargoWise notes.\n\nWe deploy an automated reconciliation engine that cross-references carrier accessorial invoices against terminal container event logs, immediately catching disputed per-diem charges and compiling documentation packets for prompt carrier disputes.\n\nWould you be open to running a test batch of disputed carrier D&D bills through our reconciliation validator this week?",
+    "review_status": "needs_review",
+    "created_at_utc": "2026-10-17T21:23:00.524613+00:00",
+    "id": "gtm_cae660eb",
+    "company": "Pacific Crest Global Logistics",
+    "email": "disputes@pacificcrestlogistics.com",
+    "subject": "Automated D&D dispute verification for Pacific Crest shipments",
+    "body": "David,\n\nAuditing ocean carrier detention and demurrage invoices against terminal gate timestamps and free-time agreements is notoriously time-consuming when managed across email chains and CargoWise notes.\n\nWe deploy an automated reconciliation engine that cross-references carrier accessorial invoices against terminal container event logs, immediately catching disputed per-diem charges and compiling documentation packets for prompt carrier disputes.\n\nWould you be open to running a test batch of disputed carrier D&D bills through our reconciliation validator this week?",
+    "status": "needs_review"
+  },
+  {
+    "prospect_id": "gtm_73909b5d",
+    "company_name": "HarborGate Intermodal",
+    "vertical": "Maritime Freight/NVOCC",
+    "contact_name": "Nadia Chen",
+    "contact_title": "Head of Finance & Compliance",
+    "contact_email": "billing-audit@harborgateintl.com",
+    "pain_points": [
+      {
+        "category": "Accessorial & Drayage Pass-Through Leakage",
+        "target_systems": [
+          "Magaya Supply Chain",
+          "QuickBooks Online"
+        ],
+        "discrepancy_pattern": "Chassis split fees and congestion surcharges absorbed instead of being billed through to consignees.",
+        "estimated_leakage_basis": "Unbilled accessorials and carrier chassis bill discrepancies"
+      }
+    ],
+    "custom_hook": "Reconciling drayage chassis split fees and terminal accessorials against customer freight invoices.",
+    "staged_email_subject": "Stopping chassis fee & terminal surcharge pass-through leakage",
+    "staged_email_body": "Nadia,\n\nFor mid-sized NVOCCs, unbilled chassis splits and terminal wait-time surcharges represent a consistent 1.5% to 3% margin leak simply because carrier drayage bills arrive weeks after consignee invoices are finalized.\n\nOur reconciliation pipeline programmatically matches late-arriving drayage invoices to original booking files and automatically stages supplementary billing entries for review.\n\nCould we share a 5-minute walkthrough showing how HarborGate can automate drayage pass-through reconciliations?",
+    "review_status": "needs_review",
+    "created_at_utc": "2026-10-17T21:23:00.524613+00:00",
+    "id": "gtm_73909b5d",
+    "company": "HarborGate Intermodal",
+    "email": "billing-audit@harborgateintl.com",
+    "subject": "Stopping chassis fee & terminal surcharge pass-through leakage",
+    "body": "Nadia,\n\nFor mid-sized NVOCCs, unbilled chassis splits and terminal wait-time surcharges represent a consistent 1.5% to 3% margin leak simply because carrier drayage bills arrive weeks after consignee invoices are finalized.\n\nOur reconciliation pipeline programmatically matches late-arriving drayage invoices to original booking files and automatically stages supplementary billing entries for review.\n\nCould we share a 5-minute walkthrough showing how HarborGate can automate drayage pass-through reconciliations?",
+    "status": "needs_review"
+  },
+  {
+    "prospect_id": "gtm_e4ec3886",
+    "company_name": "Keystone Precision Machining",
+    "vertical": "Precision CNC",
+    "contact_name": "Brian Kelling",
+    "contact_title": "General Manager",
+    "contact_email": "purchasing@keystoneprecisioncnc.com",
+    "pain_points": [
+      {
+        "category": "Outside Processing (Plating/Heat-Treat) PO Reconciliation",
+        "target_systems": [
+          "JobBOSS²",
+          "Excel"
+        ],
+        "discrepancy_pattern": "Anodizing and heat-treat vendor invoices billed on gross lot quantities rather than delivered good parts, with missing cert tracking.",
+        "estimated_leakage_basis": "Outside processing over-charges and traveler scrap tracking gaps"
+      }
+    ],
+    "custom_hook": "Matching outside processing invoices (anodizing/heat-treat) against JobBOSS router piece counts and purchase orders.",
+    "staged_email_subject": "Automating outside processing PO reconciliation for Keystone Precision",
+    "staged_email_body": "Brian,\n\nWhen sending precision-machined components out for heat treat, plating, or passivation, vendor invoices frequently arrive with lot surcharges or piece counts that do not match the quantities accepted back on the traveler router in JobBOSS.\n\nWe provide a zero-loss financial reconciliation harness designed specifically for machine shops. It automatically flags discrepancies between outside service invoices, receiving records, and original PO quotes before accounts payable issues payment.\n\nWould you be open to running a brief test comparing your last month of outside processing invoices against JobBOSS router receipts?",
+    "review_status": "needs_review",
+    "created_at_utc": "2026-10-17T21:23:00.524613+00:00",
+    "id": "gtm_e4ec3886",
+    "company": "Keystone Precision Machining",
+    "email": "purchasing@keystoneprecisioncnc.com",
+    "subject": "Automating outside processing PO reconciliation for Keystone Precision",
+    "body": "Brian,\n\nWhen sending precision-machined components out for heat treat, plating, or passivation, vendor invoices frequently arrive with lot surcharges or piece counts that do not match the quantities accepted back on the traveler router in JobBOSS.\n\nWe provide a zero-loss financial reconciliation harness designed specifically for machine shops. It automatically flags discrepancies between outside service invoices, receiving records, and original PO quotes before accounts payable issues payment.\n\nWould you be open to running a brief test comparing your last month of outside processing invoices against JobBOSS router receipts?",
+    "status": "needs_review"
+  },
+  {
+    "prospect_id": "gtm_33207f88",
+    "company_name": "AeroCut Dynamics",
+    "vertical": "Precision CNC",
+    "contact_name": "Samantha Miller",
+    "contact_title": "VP of Operations",
+    "contact_email": "ops@aerocutdynamics.com",
+    "pain_points": [
+      {
+        "category": "Raw Material Bar Stock & MTR Variance",
+        "target_systems": [
+          "E2 Shop System",
+          "Global Shop Solutions"
+        ],
+        "discrepancy_pattern": "Material distributor invoices showing unquoted cutting surcharges and weight discrepancies against certified bar stock receiving logs.",
+        "estimated_leakage_basis": "Raw material weight discrepancies and unapproved freight/prep adders"
+      }
+    ],
+    "custom_hook": "3-way matching raw aerospace titanium and 6061 bar stock invoices against E2 receiving logs and heat certs.",
+    "staged_email_subject": "Automated bar stock & cutting adder audit for AeroCut Dynamics",
+    "staged_email_body": "Samantha,\n\nBetween drop fees, cutting charges, and alloy surcharges, metal distributor invoices often contain subtle line-item adjustments that bypass standard receiving checks in E2.\n\nOur deterministic reconciliation scripts perform line-by-line verification of bar stock invoices against purchase order price breaks and certified received weights, ensuring no unapproved supplier markups slide through to job costs.\n\nCould we benchmark your last quarter of raw material invoices against your PO pricing schedules?",
+    "review_status": "needs_review",
+    "created_at_utc": "2026-10-17T21:23:00.524613+00:00",
+    "id": "gtm_33207f88",
+    "company": "AeroCut Dynamics",
+    "email": "ops@aerocutdynamics.com",
+    "subject": "Automated bar stock & cutting adder audit for AeroCut Dynamics",
+    "body": "Samantha,\n\nBetween drop fees, cutting charges, and alloy surcharges, metal distributor invoices often contain subtle line-item adjustments that bypass standard receiving checks in E2.\n\nOur deterministic reconciliation scripts perform line-by-line verification of bar stock invoices against purchase order price breaks and certified received weights, ensuring no unapproved supplier markups slide through to job costs.\n\nCould we benchmark your last quarter of raw material invoices against your PO pricing schedules?",
+    "status": "needs_review"
+  }
+]

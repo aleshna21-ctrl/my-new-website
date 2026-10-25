@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-STATE_DIR = Path(r"C:\Users\alesh\jev-workspace\hud-interface\state")
+STATE_DIR = Path(os.environ.get("HUD_STATE_DIR", str(Path(__file__).resolve().parent.parent / "state")))
 GUARDRAIL_LOG = STATE_DIR / "guardrail_events.json"
 
 # Prohibited destructive / irreversible command regex patterns

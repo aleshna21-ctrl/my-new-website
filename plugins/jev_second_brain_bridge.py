@@ -9,10 +9,11 @@ Strictly adheres to:
 """
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
-HUD_INTERFACE_DIR = Path(r"C:\Users\alesh\jev-workspace\hud-interface")
+HUD_INTERFACE_DIR = Path(os.environ.get("HUD_DIR", str(Path(__file__).resolve().parent.parent)))
 if str(HUD_INTERFACE_DIR) not in sys.path:
     sys.path.insert(0, str(HUD_INTERFACE_DIR))
 

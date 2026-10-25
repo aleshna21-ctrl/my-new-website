@@ -1,12 +1,17 @@
-﻿import os
+import os
 import sqlite3
 from pathlib import Path
 
-TARGET_DIR = r"C:\Users\alesh\jev-workspace\hud-interface"
-os.chdir(TARGET_DIR)
+BASE_DIR = Path(__file__).resolve().parent
+os.chdir(BASE_DIR)
 
 LEDGER_PATH = Path(r"..\delivery-offline\job_ledger.db")
+if not LEDGER_PATH.exists():
+    LEDGER_PATH = BASE_DIR / "data" / "job_ledger.db"
+
 OUTBOX_PATH = Path(r"..\notification-outbox\metadata_outbox.json")
+if not OUTBOX_PATH.exists():
+    OUTBOX_PATH = BASE_DIR / "data" / "metadata_outbox.json"
 
 def inspect_hud_state():
     print("=== JEV Engine HUD & Ledger Inspection ===")

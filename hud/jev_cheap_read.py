@@ -20,6 +20,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,18 +28,19 @@ from typing import Any
 
 from .jev_guard import screen_tool_result
 
-WORKSPACE_ROOT = Path(r"C:\Users\alesh\jev-workspace")
-HUD_ROOT = WORKSPACE_ROOT / "hud-interface"
+HUD_ROOT = Path(os.environ.get("HUD_DIR", str(Path(__file__).resolve().parent.parent)))
+WORKSPACE_ROOT = Path(os.environ.get("JEV_PROJECT_ROOT", str(HUD_ROOT.parent)))
 OFFLINE_DIR = WORKSPACE_ROOT / "delivery-offline"
 GTM_DIR = WORKSPACE_ROOT / "gtm-research"
 OUTBOX_DIR = WORKSPACE_ROOT / "notification-outbox"
-SECOND_BRAIN_ROOT = Path(r"G:\My Drive\second-brain")
-MARK_LVI_ROOT = Path(r"C:\Users\alesh\Downloads\Mark-LVI-main")
+SECOND_BRAIN_ROOT = Path(os.environ.get("SECOND_BRAIN_DIR", r"G:\My Drive\second-brain" if os.name == "nt" else str(HUD_ROOT / "vault")))
+MARK_LVI_ROOT = Path(os.environ.get("MARK_LVI_DIR", r"C:\Users\alesh\Downloads\Mark-LVI-main" if os.name == "nt" else str(HUD_ROOT / "mark-lvi")))
 
-STATE_DIR = HUD_ROOT / "state"
+STATE_DIR = Path(os.environ.get("HUD_STATE_DIR", str(HUD_ROOT / "state")))
 CHEAP_READ_LOG = STATE_DIR / "cheap_read_events.json"
 
 ALLOWED_ROOTS = [
+    HUD_ROOT,
     WORKSPACE_ROOT,
     SECOND_BRAIN_ROOT,
     MARK_LVI_ROOT,
@@ -105,6 +107,9 @@ def resolve_authorized_file(raw_path: str) -> tuple[Path | None, str | None]:
                     if alt.exists():
                         candidate = alt
                         break
+
+    if not candidate.exists() and (HUD_ROOT / "data" / candidate.name).exists():
+        candidate = HUD_ROOT / "data" / candidate.name
 
     try:
         resolved = candidate.resolve()
