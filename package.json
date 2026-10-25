@@ -6,6 +6,8 @@
     "dev": "python hud_server.py",
     "start": "python hud_server.py",
     "cockpit": "python app.py",
+    "model": "python hermes_8080_server.py",
+    "model:8080": "python hermes_8080_server.py",
     "test": "python -m unittest discover tests"
   }
 }
