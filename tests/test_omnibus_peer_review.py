@@ -110,21 +110,19 @@ class OmnibusPeerReviewTests(unittest.TestCase):
         self.assertFalse(res["is_jev_output"])
         self.assertNotIn("latency_ms", res)
 
-    def test_three_html_prototypes_pass_peer_review_guardrails(self):
-        prototypes = [
-            "prototype-1-ring-command.html",
-            "prototype-2-minimal-3d.html",
-            "prototype-3-cockpit-split.html",
+    def test_html_cockpit_passes_peer_review_guardrails(self):
+        targets = [
+            self.root / "index.html",
+            self.root / "static" / "index.html",
         ]
-        for name in prototypes:
-            path = self.root / name
-            self.assertTrue(path.is_file(), f"Missing prototype: {name}")
+        for path in targets:
+            self.assertTrue(path.is_file(), f"Missing file: {path.name}")
             html = path.read_text(encoding="utf-8")
             # 1. Zero external CDN dependencies (air-gap safe)
             ext_urls = re.findall(r"https?://(?!127\.0\.0\.1|localhost)", html)
-            self.assertEqual(ext_urls, [], f"{name} contains prohibited external CDN URLs: {ext_urls}")
+            self.assertEqual(ext_urls, [], f"{path.name} contains prohibited external CDN URLs: {ext_urls}")
             # 2. Zero parseFloat on financial figures
-            self.assertNotIn("parseFloat", html, f"{name} uses prohibited parseFloat")
+            self.assertNotIn("parseFloat", html, f"{path.name} uses prohibited parseFloat")
             # 3. Includes shared omnibus engine & Jev Market Judgment
             self.assertIn("jev-omnibus.js", html)
             self.assertIn("Jev Market Judgment", html)

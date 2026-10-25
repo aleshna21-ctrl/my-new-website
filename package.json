@@ -1,0 +1,11 @@
+{
+  "name": "jev-hud-interface",
+  "version": "1.0.0",
+  "description": "JEV Command Center and AI OS Dashboard",
+  "scripts": {
+    "dev": "python hud_server.py",
+    "start": "python hud_server.py",
+    "cockpit": "python app.py",
+    "test": "python -m unittest discover tests"
+  }
+}
