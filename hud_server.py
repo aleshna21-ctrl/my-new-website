@@ -749,6 +749,9 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                 prompt = "Extract the following synthetic event exactly, preserving all values: " + json.dumps(sample)
                 adapter = LiveLocalModelAdapter(allow_simulation=allow_sim)
                 res = adapter.enforce_schema_and_quarantine(prompt, FailureEvent)
+                with _HERMES_CACHE_LOCK:
+                    _HERMES_CACHE["value"] = None
+                    _HERMES_CACHE["at"] = 0.0
                 self._send_json(res)
             except Exception as exc:
                 self._send_json({"error": "Probe failed: " + str(exc), "error_type": type(exc).__name__}, 500)
