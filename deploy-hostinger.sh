@@ -52,9 +52,19 @@ tar -czf "$BUNDLE" \
     vps-backup-and-auth.sh \
     hud_server.py \
     app.py \
+    index.html \
+    package.json \
+    inference_adapter.py \
+    data_contracts.py \
+    hermes_8080_server.py \
+    offline_observer.py \
+    offline_telemetry.py \
+    job_ledger.py \
+    smtp_alert_relay.py \
     hud \
     static \
     config \
+    data \
     inbox \
     plugins
 
@@ -96,7 +106,7 @@ if command -v ufw >/dev/null 2>&1; then
 fi
 
 echo "---> [VPS] Building and starting Docker Compose stack on port ${PORT}..."
-docker compose up -d --build
+docker compose up -d --build --force-recreate
 
 echo "---> [VPS] Waiting for AIOS Command Center health check..."
 sleep 3

@@ -23,6 +23,7 @@ param(
     [string]$RemoteDir     = "/opt/aios",
     [int]$Port             = 5050,
     [string]$BindIp        = "0.0.0.0",
+    [string]$KeyPath       = "",
     [string]$KeyPassphrase = $env:SSH_KEY_PASSPHRASE,
     [switch]$Interactive,
     [switch]$InstallBackupCron,
@@ -64,9 +65,19 @@ $TarArgs = @(
     "vps-backup-and-auth.sh",
     "hud_server.py",
     "app.py",
+    "index.html",
+    "package.json",
+    "inference_adapter.py",
+    "data_contracts.py",
+    "hermes_8080_server.py",
+    "offline_observer.py",
+    "offline_telemetry.py",
+    "job_ledger.py",
+    "smtp_alert_relay.py",
     "hud",
     "static",
     "config",
+    "data",
     "inbox",
     "plugins"
 )
@@ -80,7 +91,34 @@ $BundleSizeKB = [math]::Round((Get-Item $BundlePath).Length / 1KB, 1)
 Write-Host "      Archive ready ($BundleSizeKB KB)." -ForegroundColor Green
 
 $CronStep = if ($InstallBackupCron) { "$RemoteDir/vps-backup-and-auth.sh install-cron" } else { "echo '---> Backup helper ready at $RemoteDir/vps-backup-and-auth.sh'" }
-$PubKeyPath = Join-Path (Join-Path $HOME ".ssh") "id_ed25519.pub"
+
+if ([string]::IsNullOrEmpty($KeyPath)) {
+    $CandidateKeys = @(
+        (Join-Path (Join-Path $HOME ".ssh") "id_rsa"),
+        (Join-Path (Join-Path $HOME ".ssh") "id_ed25519")
+    )
+    foreach ($cand in $CandidateKeys) {
+        if (Test-Path $cand) {
+            & ssh.exe -i $cand -p $SshPort -o ConnectTimeout=3 -o BatchMode=yes $TargetHost "echo test_ok" 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                $KeyPath = $cand
+                break
+            }
+        }
+    }
+    if ([string]::IsNullOrEmpty($KeyPath)) {
+        $KeyPath = if (Test-Path (Join-Path (Join-Path $HOME ".ssh") "id_rsa")) {
+            Join-Path (Join-Path $HOME ".ssh") "id_rsa"
+        } else {
+            Join-Path (Join-Path $HOME ".ssh") "id_ed25519"
+        }
+    }
+}
+
+$PubKeyPath = "$KeyPath.pub"
+if (-not (Test-Path $PubKeyPath)) {
+    $PubKeyPath = Join-Path (Join-Path $HOME ".ssh") "id_ed25519.pub"
+}
 $PubKeyLine = if (Test-Path $PubKeyPath) { (Get-Content $PubKeyPath -Raw).Trim() } else { "" }
 
 # Prepare remote provisioning & Docker Compose startup script
@@ -94,6 +132,12 @@ tar -xzf /tmp/aios-deploy-bundle.tar.gz -C $RemoteDir
 rm -f /tmp/aios-deploy-bundle.tar.gz
 sed -i 's/\r$//' $RemoteDir/vps-backup-and-auth.sh
 chmod +x $RemoteDir/vps-backup-and-auth.sh
+
+if [ -d /var/lib/docker/volumes/aios-data/_data ]; then
+    echo '---> Synchronizing data stores to aios-data docker volume...'
+    cp -rn $RemoteDir/data/* /var/lib/docker/volumes/aios-data/_data/ 2>/dev/null || true
+    chown -R 10001:10001 /var/lib/docker/volumes/aios-data/_data
+fi
 
 cd $RemoteDir
 if [ ! -f .env ]; then
@@ -118,14 +162,14 @@ if command -v ufw >/dev/null 2>&1; then
 fi
 
 echo '---> Building and starting AIOS Command Center container...'
-docker compose up -d --build
+docker compose up -d --build --force-recreate
 
 echo '---> Waiting 3 seconds for container startup...'
 sleep 3
 docker compose ps
 
 echo '---> Probing live telemetry endpoint on VPS loopback...'
-python3 -c "import urllib.request, json; r=urllib.request.urlopen('http://127.0.0.1:$Port/api/os/telemetry', timeout=5); d=json.loads(r.read()); print('VPS Telemetry OK: HTTP', r.status, '| ts=', d.get('ts'), '| hash=', d.get('hash'))"
+curl -fsS http://127.0.0.1:$Port/api/os/telemetry >/dev/null && echo 'VPS Telemetry OK (HTTP 200)'
 $CronStep
 "@
 
@@ -152,7 +196,7 @@ try {
 }
 $TcpClient.Close()
 
-$KeyPath = Join-Path (Join-Path $HOME ".ssh") "id_ed25519"
+Write-Host "      Using SSH Identity: $KeyPath" -ForegroundColor Gray
 $AskPassBat = $null
 
 if ($Interactive -and [string]::IsNullOrEmpty($KeyPassphrase)) {
@@ -179,20 +223,30 @@ if (-not [string]::IsNullOrEmpty($KeyPassphrase)) {
 
 try {
     $BatchOpt = if ($AskPassBat -or $Interactive) { "BatchMode=no" } else { "BatchMode=yes" }
-    Write-Host "      Uploading archive to ${TargetHost}:/tmp/aios-deploy-bundle.tar.gz (SSH port $SshPort) ..." -ForegroundColor Yellow
+    $ScriptTemp = Join-Path $env:TEMP "aios-deploy-step.sh"
+    $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($ScriptTemp, ($RemoteScript -replace "`r`n", "`n"), $Utf8NoBom)
+
+    Write-Host "      Uploading deploy bundle and script to ${TargetHost}:/tmp/ (SSH port $SshPort) ..." -ForegroundColor Yellow
     & scp.exe -i $KeyPath -P $SshPort -o ConnectTimeout=10 -o $BatchOpt $BundlePath "${TargetHost}:/tmp/aios-deploy-bundle.tar.gz"
     if ($LASTEXITCODE -ne 0) {
-        throw "SCP upload failed. Verify SSH key access (or -KeyPassphrase) for ${TargetHost}:$SshPort."
+        throw "SCP upload of bundle failed. Verify SSH key access for ${TargetHost}:$SshPort."
+    }
+    & scp.exe -i $KeyPath -P $SshPort -o ConnectTimeout=10 -o $BatchOpt $ScriptTemp "${TargetHost}:/tmp/aios-deploy-step.sh"
+    if ($LASTEXITCODE -ne 0) {
+        throw "SCP upload of script failed. Verify SSH key access for ${TargetHost}:$SshPort."
     }
 
     # 3. Execute remote extraction, build, and launch via SSH
     Write-Host "`n[3/4] Extracting and launching Docker Compose stack on $TargetHost ..." -ForegroundColor Yellow
-    $CleanRemoteScript = $RemoteScript -replace "`r`n", "`n"
-    & ssh.exe -i $KeyPath -p $SshPort -o ConnectTimeout=10 -o $BatchOpt $TargetHost $CleanRemoteScript
+    & ssh.exe -i $KeyPath -p $SshPort -o ConnectTimeout=10 -o $BatchOpt $TargetHost "bash /tmp/aios-deploy-step.sh; rm -f /tmp/aios-deploy-step.sh"
     if ($LASTEXITCODE -ne 0) {
         throw "Remote deployment command failed on $TargetHost."
     }
 } finally {
+    if ($ScriptTemp -and (Test-Path $ScriptTemp)) {
+        Remove-Item $ScriptTemp -Force -ErrorAction SilentlyContinue
+    }
     if ($AskPassBat -and (Test-Path $AskPassBat)) {
         Remove-Item $AskPassBat -Force -ErrorAction SilentlyContinue
     }

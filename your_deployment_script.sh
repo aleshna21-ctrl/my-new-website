@@ -24,7 +24,9 @@ echo "[1/3] Packaging AIOS project files..."
 # Dynamically aggregate paths that exist locally to prevent tar stat aborts
 CANDIDATE_ITEMS=(
 "Dockerfile" "compose.yml" ".dockerignore" ".env" ".env.example" "requirements.txt"
-"vps-backup-and-auth.sh" "hud_server.py" "app.py" "hud" "static" "config" "inbox" "plugins"
+"vps-backup-and-auth.sh" "hud_server.py" "app.py" "index.html" "package.json"
+"inference_adapter.py" "data_contracts.py" "hermes_8080_server.py" "offline_observer.py" "offline_telemetry.py"
+"job_ledger.py" "smtp_alert_relay.py" "hud" "static" "config" "data" "inbox" "plugins"
 )
 FILES_TO_PACK=()
 for item in "${CANDIDATE_ITEMS[@]}"; do
@@ -110,7 +112,7 @@ fi
 fi
 
 echo "---> [VPS] Building and starting Docker Compose stack on port ${PORT}..."
-docker compose up -d --build --remove-orphans
+docker compose up -d --build --force-recreate --remove-orphans
 
 echo "---> [VPS] Awaiting AIOS service responsiveness..."
 MAX_RETRIES=15
