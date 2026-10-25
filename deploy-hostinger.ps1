@@ -168,8 +168,9 @@ echo '---> Waiting 3 seconds for container startup...'
 sleep 3
 docker compose ps
 
-echo '---> Probing live telemetry endpoint on VPS loopback...'
+echo '---> Probing live telemetry & gateway status on VPS loopback...'
 curl -fsS http://127.0.0.1:$Port/api/os/telemetry >/dev/null && echo 'VPS Telemetry OK (HTTP 200)'
+curl -fsS http://127.0.0.1:$Port/api/gateway/status >/dev/null && echo 'VPS Gateway API OK (HTTP 200)'
 $CronStep
 "@
 
