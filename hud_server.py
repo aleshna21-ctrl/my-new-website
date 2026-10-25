@@ -31,8 +31,49 @@ for p in (OFFLINE_DIR, GTM_DIR):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+def _load_env_file(path: str):
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                k, v = k.strip(), v.strip()
+                if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                    v = v[1:-1]
+                if k and k not in os.environ:
+                    os.environ[k] = v
+    except Exception:
+        pass
+
+_load_env_file(os.path.join(HUD_DIR, ".env"))
+_load_env_file(os.path.join(ROOT_DIR, ".env"))
+
+def get_hermes_endpoint() -> str:
+    return os.environ.get("HERMES_ENDPOINT", "http://127.0.0.1:8080/v1/chat/completions")
+
+def get_hermes_model() -> str:
+    return os.environ.get("HERMES_MODEL", "qwen3:4b")
+
+def get_hermes_models_url() -> str:
+    endpoint = get_hermes_endpoint()
+    try:
+        url = urllib.parse.urlsplit(endpoint)
+        path = url.path
+        if path.endswith("/chat/completions"):
+            base_path = path[:-len("/chat/completions")]
+            models_path = f"{base_path}/models"
+        else:
+            models_path = "/v1/models"
+        return f"{url.scheme}://{url.netloc}{models_path}"
+    except Exception:
+        return "http://127.0.0.1:8080/v1/models"
+
 def probe_hermes_live() -> dict:
-    url = "http://127.0.0.1:8080/v1/models"
+    url = get_hermes_models_url()
     try:
         req = urllib.request.Request(url, method="GET")
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=1.5) as resp:
@@ -64,8 +105,8 @@ def get_hermes_telemetry() -> dict:
         "max_retries": saved.get("max_retries", 1),
         "attempts": saved.get("attempts", []),
         "timestamp_utc": saved.get("timestamp_utc", None),
-        "model": saved.get("model", "qwen3:4b"),
-        "endpoint": saved.get("endpoint", "http://127.0.0.1:8080/v1/chat/completions"),
+        "model": saved.get("model", get_hermes_model()),
+        "endpoint": saved.get("endpoint", get_hermes_endpoint()),
         "probe_running": PROBE_LOCK.locked(),
         "server_pid": os.getpid(),
         "build_id": BUILD_ID
@@ -747,7 +788,9 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                 sample = {"type": "probe_test", "description": "Synthetic HUD connectivity test",
                           "reported_events": 1, "period": "TEST", "evidence_ids": ["hud-probe-" + uuid.uuid4().hex]}
                 prompt = "Extract the following synthetic event exactly, preserving all values: " + json.dumps(sample)
-                adapter = LiveLocalModelAdapter(allow_simulation=allow_sim)
+                adapter = LiveLocalModelAdapter(endpoint=get_hermes_endpoint(),
+                                                model_tag=get_hermes_model(),
+                                                allow_simulation=allow_sim)
                 res = adapter.enforce_schema_and_quarantine(prompt, FailureEvent)
                 with _HERMES_CACHE_LOCK:
                     _HERMES_CACHE["value"] = None

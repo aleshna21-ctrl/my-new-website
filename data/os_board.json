@@ -22,15 +22,15 @@
     },
     {
       "id": "task_db1bf7d186",
-      "title": "Start the local Hermes model on 127.0.0.1:8080",
-      "status": "todo",
+      "title": "Start and bind local Hermes model (Ollama qwen3:4b on 127.0.0.1:11434)",
+      "status": "done",
       "priority": 2,
       "vital": true,
       "estimate_min": 20,
       "due": "",
       "goal_id": "",
       "created_at": "2026-10-23T01:09:22+00:00",
-      "done_at": ""
+      "done_at": "2026-10-25T18:03:00+00:00"
     },
     {
       "id": "task_4b74f846b7",

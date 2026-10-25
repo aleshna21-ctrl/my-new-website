@@ -32,6 +32,7 @@ inbox/*
 *.log
 *.pid
 *.lock
+inference_telemetry.json
 
 # OS & IDE
 .DS_Store

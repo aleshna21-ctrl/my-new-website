@@ -24,6 +24,8 @@ services:
       - HUD_SCRATCH_DIR=/app/scratch
       - HUD_CALENDAR_DIR=/app/calendar
       - SECOND_BRAIN_DIR=/app/vault
+      - HERMES_ENDPOINT=${HERMES_ENDPOINT:-http://127.0.0.1:8080/v1/chat/completions}
+      - HERMES_MODEL=${HERMES_MODEL:-qwen3:4b}
       - TZ=${TZ:-UTC}
 
     volumes:

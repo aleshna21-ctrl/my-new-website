@@ -43,10 +43,16 @@ def save_telemetry(envelope):
             os.unlink(temporary)
 
 
+DEFAULT_ENDPOINT = "http://127.0.0.1:8080/v1/chat/completions"
+DEFAULT_MODEL = "qwen3:4b"
+
+
 class LiveLocalModelAdapter:
-    def __init__(self, endpoint="http://127.0.0.1:8080/v1/chat/completions",
-                 model_tag="qwen3:4b", max_retries=1, max_tokens=2048,
+    def __init__(self, endpoint=None,
+                 model_tag=None, max_retries=1, max_tokens=2048,
                  allow_simulation=False, timeout=45, model_name=None):
+        if endpoint is None:
+            endpoint = os.environ.get("HERMES_ENDPOINT", DEFAULT_ENDPOINT)
         url = urllib.parse.urlsplit(endpoint)
         if (url.scheme != "http" or url.hostname not in ("127.0.0.1", "localhost", "::1")
                 or url.path != "/v1/chat/completions" or url.username or url.password
@@ -61,9 +67,10 @@ class LiveLocalModelAdapter:
         if type(timeout) not in (int, float) or not 0 < timeout <= 60:
             raise ValueError("timeout must be greater than zero and at most 60 seconds.")
         self.endpoint = endpoint
-        self.model_tag = model_name if model_name is not None else model_tag
-        if not isinstance(self.model_tag, str) or not self.model_tag.strip():
+        resolved_tag = model_name if model_name is not None else (model_tag if model_tag is not None else os.environ.get("HERMES_MODEL", DEFAULT_MODEL))
+        if not isinstance(resolved_tag, str) or not resolved_tag.strip():
             raise ValueError("A model tag is required.")
+        self.model_tag = resolved_tag
         self.model_name = self.model_tag
         self.max_retries = max_retries
         self.max_tokens = max_tokens
