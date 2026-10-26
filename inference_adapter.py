@@ -54,7 +54,7 @@ class LiveLocalModelAdapter:
         if endpoint is None:
             endpoint = os.environ.get("HERMES_ENDPOINT", DEFAULT_ENDPOINT)
         url = urllib.parse.urlsplit(endpoint)
-        if (url.scheme != "http" or url.hostname not in ("127.0.0.1", "localhost", "::1")
+        if (url.scheme != "http" or url.hostname not in ("127.0.0.1", "localhost", "::1", "hermes", "host.docker.internal", "0.0.0.0")
                 or url.path != "/v1/chat/completions" or url.username or url.password
                 or url.query or url.fragment):
             raise ValueError("Inference endpoint must be a local HTTP chat-completions endpoint.")

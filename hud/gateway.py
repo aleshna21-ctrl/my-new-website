@@ -392,38 +392,38 @@ def trigger_cron_job(cron_id: str, path: Path = CRON_REGISTRY_PATH) -> Dict[str,
 _TASK_LOCK = threading.Lock()
 
 
-def load_task_history(path: Path = TASKS_REGISTRY_PATH, limit: int = 50) -> List[Dict[str, Any]]:
+def load_task_history(path: Path | None = None, limit: int = 50) -> List[Dict[str, Any]]:
     with _TASK_LOCK:
-        path = Path(path)
-        if not path.exists():
+        target_path = Path(path if path is not None else TASKS_REGISTRY_PATH)
+        if not target_path.exists():
             return []
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(target_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data[-limit:] if isinstance(data, list) else []
         except Exception:
             return []
 
 
-def record_task_history(record: Dict[str, Any], path: Path = TASKS_REGISTRY_PATH):
+def record_task_history(record: Dict[str, Any], path: Path | None = None):
     with _TASK_LOCK:
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        target_path = Path(path if path is not None else TASKS_REGISTRY_PATH)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
         tasks = []
-        if path.exists():
+        if target_path.exists():
             try:
-                with open(path, "r", encoding="utf-8") as f:
+                with open(target_path, "r", encoding="utf-8") as f:
                     tasks = json.load(f)
             except Exception:
                 tasks = []
         tasks.append(record)
         tasks = tasks[-100:]  # keep recent 100
-        tmp = path.with_suffix(".tmp")
+        tmp = target_path.with_suffix(".tmp")
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(tasks, f, indent=2)
             f.flush()
             os.fsync(f.fileno())
-        os.replace(tmp, path)
+        os.replace(tmp, target_path)
 
 
 def execute_task_command(command: str, params: Dict[str, Any]) -> Dict[str, Any]:

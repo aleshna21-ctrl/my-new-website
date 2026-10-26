@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 20,
+  "revision": 22,
   "settings": {
     "workday_start": "09:00",
     "workday_end": "18:00",
@@ -235,6 +235,30 @@
       "goal_id": "",
       "created_at": "2026-10-26T00:05:38+00:00",
       "done_at": ""
+    },
+    {
+      "id": "task_15fced64d2",
+      "title": "Gateway integration verification",
+      "status": "todo",
+      "priority": 1,
+      "vital": true,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T00:28:42+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_54362b5d54",
+      "title": "Hermes Autonomous Discovery Task",
+      "status": "todo",
+      "priority": 2,
+      "vital": false,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T00:28:42+00:00",
+      "done_at": ""
     }
   ],
   "goals": [
@@ -263,5 +287,5 @@
     }
   ],
   "events": [],
-  "updated_at": "2026-10-26T00:05:38+00:00"
+  "updated_at": "2026-10-26T00:28:42+00:00"
 }

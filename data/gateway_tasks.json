@@ -1209,5 +1209,161 @@
     "error": null,
     "executed_at": "2026-10-26T00:05:38.908822+00:00",
     "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-a83b7fc2",
+    "command": "model_inference",
+    "params": {
+      "prompt": "Evaluate system health",
+      "model": "qwen3:4b"
+    },
+    "status": "completed",
+    "result": {
+      "prompt": "Evaluate system health",
+      "model": "qwen3:4b",
+      "response": "System operating normally at nominal latency.",
+      "raw_usage": {
+        "prompt_tokens": 12,
+        "completion_tokens": 28,
+        "total_tokens": 40
+      }
+    },
+    "error": null,
+    "executed_at": "2026-10-26T00:25:40.782381+00:00",
+    "duration_ms": 78.0
+  },
+  {
+    "task_id": "task-cmd-facc1426",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-26T00:28:41.334373+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-26T00:28:41.334373+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-ec7bb670",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-26T00:28:41.460809+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-26T00:28:41.460809+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-685a75d9",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-26T00:28:41.976588+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-bd5dc5d8",
+    "command": "ping",
+    "params": {
+      "command": "ping"
+    },
+    "status": "completed",
+    "result": {
+      "message": "pong",
+      "service": "hermes-aios-gateway",
+      "timestamp": "2026-10-26T00:28:42.041487+00:00"
+    },
+    "error": null,
+    "executed_at": "2026-10-26T00:28:42.041487+00:00",
+    "duration_ms": 0.0
+  },
+  {
+    "task_id": "task-cmd-1aac7fa2",
+    "command": "audit_invariants",
+    "params": {
+      "command": "audit_invariants"
+    },
+    "status": "completed",
+    "result": {
+      "invariant": {
+        "passed": true,
+        "formula": "12 == 10 + 1 + 1",
+        "metrics": {
+          "received": 12,
+          "accepted": 10,
+          "quarantined": 1,
+          "duplicates": 1
+        },
+        "quarantined_samples": [
+          {
+            "row_idx": 12,
+            "row": 12,
+            "invoice_id": "INV-4459-QZJZ",
+            "amount": "-999.995",
+            "raw_amount": "-999.995",
+            "date": "2026-05-16",
+            "status": "quarantined",
+            "is_malformed": true,
+            "reason": "Negative StrictStr amount (-999.995)"
+          }
+        ]
+      },
+      "metrics": {
+        "received": 12,
+        "accepted": 10,
+        "quarantined": 1,
+        "duplicates": 1
+      },
+      "summary": "Audit complete: 12 == 10 + 1 + 1 -> PASS"
+    },
+    "error": null,
+    "executed_at": "2026-10-26T00:28:42.048815+00:00",
+    "duration_ms": 0.0
   }
 ]
