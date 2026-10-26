@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "revision": 22,
+  "revision": 34,
   "settings": {
     "workday_start": "09:00",
     "workday_end": "18:00",
@@ -259,6 +259,150 @@
       "goal_id": "",
       "created_at": "2026-10-26T00:28:42+00:00",
       "done_at": ""
+    },
+    {
+      "id": "task_7c5668741c",
+      "title": "Gateway integration verification",
+      "status": "todo",
+      "priority": 1,
+      "vital": true,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T00:51:25+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_cbec1323af",
+      "title": "Hermes Autonomous Discovery Task",
+      "status": "todo",
+      "priority": 2,
+      "vital": false,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T00:51:25+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_133afec232",
+      "title": "Gateway integration verification",
+      "status": "todo",
+      "priority": 1,
+      "vital": true,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T01:24:48+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_2ce5535b16",
+      "title": "Hermes Autonomous Discovery Task",
+      "status": "todo",
+      "priority": 2,
+      "vital": false,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T01:24:48+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_245968f389",
+      "title": "Gateway integration verification",
+      "status": "todo",
+      "priority": 1,
+      "vital": true,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T06:49:15+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_592eecdd6a",
+      "title": "Hermes Autonomous Discovery Task",
+      "status": "todo",
+      "priority": 2,
+      "vital": false,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T06:49:16+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_1471782371",
+      "title": "Gateway integration verification",
+      "status": "todo",
+      "priority": 1,
+      "vital": true,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T07:29:21+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_5427d99511",
+      "title": "Hermes Autonomous Discovery Task",
+      "status": "todo",
+      "priority": 2,
+      "vital": false,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T07:29:21+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_f036d1557b",
+      "title": "Gateway integration verification",
+      "status": "todo",
+      "priority": 1,
+      "vital": true,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T07:32:40+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_9e45ba86a1",
+      "title": "Hermes Autonomous Discovery Task",
+      "status": "todo",
+      "priority": 2,
+      "vital": false,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T07:32:40+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_89aec19370",
+      "title": "Gateway integration verification",
+      "status": "todo",
+      "priority": 1,
+      "vital": true,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T07:45:42+00:00",
+      "done_at": ""
+    },
+    {
+      "id": "task_63f418dd4a",
+      "title": "Hermes Autonomous Discovery Task",
+      "status": "todo",
+      "priority": 2,
+      "vital": false,
+      "estimate_min": 30,
+      "due": "",
+      "goal_id": "",
+      "created_at": "2026-10-26T07:45:42+00:00",
+      "done_at": ""
     }
   ],
   "goals": [
@@ -287,5 +431,5 @@
     }
   ],
   "events": [],
-  "updated_at": "2026-10-26T00:28:42+00:00"
+  "updated_at": "2026-10-26T07:45:42+00:00"
 }

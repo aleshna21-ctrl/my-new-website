@@ -488,17 +488,24 @@
 
   function dispatchGatewayCmd(cmd) {
     const outBox = document.getElementById('gw-console-out');
-    outBox.textContent = `[HMAC RPC] Dispatching '${cmd}' to Hermes via Gateway...`;
+    const idempKey = 'gw-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    outBox.textContent = `[HMAC RPC] Dispatching '${cmd}' to Hermes via Gateway (Idemp: ${idempKey})...`;
     fetch('/api/gateway/tasks', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': idempKey,
+        'Cache-Control': 'no-cache, no-transform, no-store'
+      },
       body: JSON.stringify({
         command: cmd,
         remote: true,
+        idempotency_key: idempKey,
         prompt: 'Prototype III Gateway execution'
       })
     }).then(r => r.json()).then(res => {
-      const summary = `[Task ${res.task_id || ''}] Status: ${res.status} | Latency: ${res.duration_ms != null ? res.duration_ms + 'ms' : 'n/a'}\nResult: ` + JSON.stringify(res.result || res.error || 'Done', null, 2);
+      const ackInfo = res.ack ? `[ACK: ${res.ack.ack_id} | SEQ: #${res.ack.sequence_id} | RTT: ${res.ack.rtt_ms != null ? res.ack.rtt_ms + 'ms' : '0ms'}]` : '';
+      const summary = `${ackInfo} [Task ${res.task_id || ''}] Status: ${res.status} | Latency: ${res.duration_ms != null ? res.duration_ms + 'ms' : 'n/a'}\nResult: ` + JSON.stringify(res.result || res.error || 'Done', null, 2);
       outBox.textContent = summary;
       c3Log('GATEWAY RPC', summary);
     }).catch(err => {

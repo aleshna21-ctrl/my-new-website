@@ -26,6 +26,8 @@
       <button class="btn sm" type="button" data-drawer="tracker" id="trig-tracker">📋 Tracker <span class="tag" id="trig-trk-meta"></span></button>
       <button class="btn sm" type="button" data-drawer="quarantine" id="trig-quarantine">⚠️ Quarantine <span class="tag warn" id="trig-quar-meta"></span></button>
       <button class="btn sm" type="button" data-drawer="gateway" id="trig-gateway">⚡ Gateway <span class="tag ok" id="trig-gw-meta">ONLINE</span></button>
+      <button class="btn sm" type="button" data-drawer="cortex" id="trig-cortex">⚡ Next Cortex <span class="tag ok" id="trig-cortex-meta">100%</span></button>
+      <button class="btn sm" type="button" data-drawer="memory" id="trig-memory">🧠 Shared Memory <span class="tag ok" id="trig-mem-meta">SYNCED</span></button>
     </div>
     <span class="pill" id="stream-pill" title="Telemetry stream (Server-Sent Events from /api/os/stream)"><i class="led"></i><span id="stream-text">CONNECTING</span></span>
     <span class="pill mono muted" id="frame-meta">no frame yet</span>
@@ -497,6 +499,8 @@
       <h2 id="gw-drawer-title">⚡ Hermes Two-Way API Gateway</h2>
       <span class="tag ok" id="gw-badge-status">HMAC-SHA256 SECURED</span>
       <span class="tag info" id="gw-badge-protocol">JSON-RPC 2.0</span>
+      <span class="tag mono" id="gw-badge-seq">SEQ #1</span>
+      <span class="tag ok" id="gw-badge-latency">● 0ms [OPTIMAL]</span>
     </div>
     <div class="quar-header-actions">
       <button class="btn sm" type="button" id="gw-btn-refresh" title="Refresh Gateway Status">↻ Refresh</button>
@@ -510,11 +514,11 @@
         <span class="quar-banner-title">Gateway Protocol Specification:</span>
         <span class="mono bold">JSON-RPC 2.0 / REST Webhook · HMAC-SHA256 Token Signature</span>
         <span class="chip-badge ok" id="gw-chip-auth">REPLAY PROTECTED</span>
+        <span class="chip-badge info" id="gw-chip-sync">SYNC: REALTIME</span>
       </div>
-      <p class="quar-banner-sub muted">
+      <p class="quar-banner-sub muted" id="gw-feedback-summary">
         Two-way authenticated bridge between AIOS Dashboard (:5050) and Hermes Service (:8080).
-        Replay defense enforces 300s clock skew threshold and unique single-use nonces.
-        Enables task commands, Kanban board mutations, and recurring cron job management.
+        Strict ACK validation, monotonic sequence counters, and RTT feedback loop active. Anti-buffering directives enforced.
       </p>
     </div>
 
@@ -686,6 +690,284 @@
   </div>
 </section>
 
+<!-- SECONDARY WIDGET 5: NEXT CORTEX DASHBOARD (CREDITS, TASKS, REAL-TIME VISUALIZATION) -->
+<section class="widget-drawer" id="drawer-cortex" role="dialog" aria-modal="true" aria-labelledby="cortex-drawer-title" hidden>
+  <header class="sheet-h">
+    <div class="quar-header-left">
+      <h2 id="cortex-drawer-title">⚡ Next Cortex // Anti-Gravity Cockpit</h2>
+      <span class="tag ok" id="cortex-badge-status">ONLINE</span>
+      <span class="tag info" id="cortex-badge-credits">100,000 CREDITS</span>
+      <span class="tag mono" id="cortex-badge-burn">0 / HR</span>
+      <span class="tag warn" id="cortex-badge-mode">AUTO-ACCEPT: OFF</span>
+    </div>
+    <div class="quar-header-actions">
+      <button class="btn sm" type="button" id="cortex-btn-toggle-auto">⚡ Toggle Auto-Accept</button>
+      <button class="btn sm" type="button" id="cortex-btn-refresh" title="Refresh Cortex Telemetry">↻ Refresh</button>
+      <button class="btn ghost sm" type="button" data-close-drawer aria-label="Close cortex drawer">✕</button>
+    </div>
+  </header>
+  <div class="sheet-body" id="cortex-drawer-body">
+    <!-- Top Metrics Overview Grid -->
+    <div class="cortex-metrics-grid">
+      <div class="cortex-metric-card">
+        <span class="mono muted sm-txt">CREDIT BUDGET</span>
+        <div class="cortex-metric-val mono" id="cortex-metric-credits">100,000</div>
+        <div class="cortex-progress-track">
+          <div class="cortex-progress-fill" id="cortex-credit-fill"></div>
+        </div>
+        <span class="mono sm-txt muted" id="cortex-credit-detail">100% remaining · Reset in 7d</span>
+      </div>
+      <div class="cortex-metric-card">
+        <span class="mono muted sm-txt">BURN RATE / HR</span>
+        <div class="cortex-metric-val mono text-cyan" id="cortex-metric-burn">0</div>
+        <span class="mono sm-txt muted" id="cortex-burn-detail">Local model qwen3:4b: UNMETERED</span>
+      </div>
+      <div class="cortex-metric-card">
+        <span class="mono muted sm-txt">AUTOMATED TASKS</span>
+        <div class="cortex-metric-val mono text-gold" id="cortex-metric-tasks">0 Active</div>
+        <span class="mono sm-txt muted" id="cortex-task-detail">0 completed · 0 pending review</span>
+      </div>
+      <div class="cortex-metric-card">
+        <span class="mono muted sm-txt">SQLITE LEDGER</span>
+        <div class="cortex-metric-val mono text-emerald" id="cortex-metric-jobs">0 Total Jobs</div>
+        <span class="mono sm-txt muted" id="cortex-job-detail">Direct read-only SQLite sync</span>
+      </div>
+    </div>
+
+    <!-- Coordinated Views Layout -->
+    <div class="cortex-coordinated-layout">
+      <!-- Left Column: Streaming Chart & Hierarchy DAG -->
+      <div class="cortex-viz-column">
+        <!-- 1. Real-time Streaming Chart -->
+        <div class="cortex-panel">
+          <div class="cortex-panel-header">
+            <h4>📈 Real-time Streaming Chart (Credits vs Queue)</h4>
+            <div class="cortex-chart-legend">
+              <span class="legend-chip cyan">● Credit Balance</span>
+              <span class="legend-chip gold">● Burn Rate (/hr)</span>
+              <span class="legend-chip emerald">● Active Jobs</span>
+            </div>
+          </div>
+          <div class="cortex-chart-wrap">
+            <svg id="cortex-chart-svg" viewBox="0 0 800 180" preserveAspectRatio="none" role="img" aria-label="Real-time Next Cortex streaming dual-axis chart"></svg>
+            <div class="cortex-chart-overlay" id="cortex-chart-overlay"></div>
+          </div>
+        </div>
+
+        <!-- 2. Interactive Hierarchy Layout DAG -->
+        <div class="cortex-panel">
+          <div class="cortex-panel-header">
+            <h4>🌳 Architecture Hierarchy Layout (Multi-Tier DAG)</h4>
+            <span class="mono sm-txt muted">Click any node to filter SQLite ledger &amp; inspect scope</span>
+          </div>
+          <div class="cortex-dag-wrap" id="cortex-dag-container">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Coordinated SQLite Ledger Inspector -->
+      <div class="cortex-inspect-column">
+        <div class="cortex-panel full-height">
+          <div class="cortex-panel-header">
+            <h4>🗄️ SQLite Ledger &amp; Task Inspector</h4>
+            <span class="tag info" id="cortex-active-filter-badge">ALL TIERS</span>
+          </div>
+          <div class="cortex-scope-summary" id="cortex-scope-summary">
+            <strong id="cortex-sel-node-title">System-wide Ledger</strong>
+            <p class="muted sm-txt" id="cortex-sel-node-desc">Showing all jobs across ingestion, sow, terminal, and audio ledgers. Select any node in the hierarchy to cross-filter.</p>
+          </div>
+          <div class="quar-table-wrap cortex-table-wrap">
+            <table class="quar-table cortex-table" id="cortex-sqlite-table">
+              <thead>
+                <tr>
+                  <th>Job ID</th>
+                  <th>Scope</th>
+                  <th>Type</th>
+                  <th>State</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody id="cortex-sqlite-tbody">
+                <!-- Dynamically rendered -->
+              </tbody>
+            </table>
+          </div>
+          <!-- Automated Task Queue -->
+          <div class="cortex-tasks-section">
+            <h5 class="cortex-subhead">Automated Background Tasks</h5>
+            <div class="cortex-task-list" id="cortex-task-list">
+              <!-- Dynamically rendered -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECONDARY WIDGET 6: SHARED SHORT-TERM MEMORY (CROSS-AGENT STATE & OBSIDIAN VAULT SYNC) -->
+<section class="widget-drawer" id="drawer-memory" role="dialog" aria-modal="true" aria-labelledby="memory-drawer-title" hidden>
+  <header class="sheet-h">
+    <div class="quar-header-left">
+      <h2 id="memory-drawer-title">🧠 Shared Memory // Cross-Agent State Management</h2>
+      <span class="tag ok" id="mem-badge-sync">SYNCED</span>
+      <span class="tag info" id="mem-badge-tasks">0 TASKS</span>
+      <span class="tag mono" id="mem-badge-agents">6 AGENTS</span>
+      <span class="tag mono" id="mem-badge-epoch">EPOCH 1</span>
+    </div>
+    <div class="quar-header-actions">
+      <button class="btn sm" type="button" id="mem-btn-sync-obsidian">📓 Sync Obsidian Vault</button>
+      <button class="btn sm" type="button" id="mem-btn-refresh" title="Refresh Shared Memory State">↻ Refresh</button>
+      <button class="btn ghost sm" type="button" data-close-drawer aria-label="Close memory drawer">✕</button>
+    </div>
+  </header>
+  <div class="sheet-body" id="memory-drawer-body">
+    <!-- Top Metrics Overview Grid -->
+    <div class="cortex-metrics-grid">
+      <div class="cortex-metric-card">
+        <span class="mono muted sm-txt">SUB-AGENTS ROSTER</span>
+        <div class="cortex-metric-val mono text-cyan" id="mem-metric-agents">6 Online</div>
+        <span class="mono sm-txt muted" id="mem-metric-agents-detail">All canonical agents active</span>
+      </div>
+      <div class="cortex-metric-card">
+        <span class="mono muted sm-txt">SHORT-TERM MEMORY TASKS</span>
+        <div class="cortex-metric-val mono text-gold" id="mem-metric-tasks">0 Tasks</div>
+        <span class="mono sm-txt muted" id="mem-metric-tasks-detail">Monotonic epoch tracking</span>
+      </div>
+      <div class="cortex-metric-card">
+        <span class="mono muted sm-txt">SHARED BLACKBOARD KEYS</span>
+        <div class="cortex-metric-val mono text-emerald" id="mem-metric-keys">0 Keys</div>
+        <span class="mono sm-txt muted" id="mem-metric-keys-detail">Thread-safe cross-agent state</span>
+      </div>
+      <div class="cortex-metric-card">
+        <span class="mono muted sm-txt">OBSIDIAN SECOND BRAIN</span>
+        <div class="cortex-metric-val mono" id="mem-metric-obsidian">SYNCED</div>
+        <span class="mono sm-txt muted" id="mem-metric-obsidian-detail">Dual-vault context mirror</span>
+      </div>
+    </div>
+
+    <!-- Coordinated Dual Column Layout -->
+    <div class="cortex-coordinated-layout">
+      <!-- Left Column: Agent Roster & Working Blackboard -->
+      <div class="cortex-viz-column">
+        <!-- 1. Agent Operational Roster -->
+        <div class="cortex-panel">
+          <div class="cortex-panel-header">
+            <h4>🤖 Active Sub-Agents &amp; Operational States</h4>
+            <span class="tag ok" id="mem-roster-status-tag">6 REGISTERED</span>
+          </div>
+          <div class="mem-agents-grid" id="mem-agents-container">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- 2. Shared Blackboard Key-Value Store -->
+        <div class="cortex-panel">
+          <div class="cortex-panel-header">
+            <h4>🗝️ Cross-Agent Blackboard (Shared Working Memory)</h4>
+            <span class="mono sm-txt muted">Thread-safe with TTL &amp; Monotonic Versioning</span>
+          </div>
+          <form class="mem-bb-form" id="mem-bb-form">
+            <input class="mem-input" id="mem-bb-key" type="text" placeholder="Key (e.g. pipeline_phase)" required>
+            <input class="mem-input" id="mem-bb-val" type="text" placeholder="Value (string or JSON)" required>
+            <select class="mem-select" id="mem-bb-agent">
+              <option value="agent-supervisor">agent-supervisor</option>
+              <option value="agent-hermes-gateway">agent-hermes-gateway</option>
+              <option value="agent-diagnostic-probe">agent-diagnostic-probe</option>
+              <option value="agent-invoice-ingestion">agent-invoice-ingestion</option>
+              <option value="agent-sow-worker">agent-sow-worker</option>
+              <option value="agent-quarantine-guard">agent-quarantine-guard</option>
+            </select>
+            <input class="mem-input mem-ttl-input" id="mem-bb-ttl" type="number" placeholder="TTL (sec, opt)" min="1">
+            <button class="btn sm go" type="submit" id="mem-bb-submit">Set Key</button>
+          </form>
+          <div class="quar-table-wrap mem-table-wrap">
+            <table class="quar-table cortex-table" id="mem-bb-table">
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Value</th>
+                  <th>Writer Agent</th>
+                  <th>Ver</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody id="mem-bb-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Completed Tasks Log & Obsidian Synchronizer -->
+      <div class="cortex-inspect-column">
+        <!-- 3. Completed Tasks Stream -->
+        <div class="cortex-panel">
+          <div class="cortex-panel-header">
+            <h4>📜 Completed Tasks Audit Stream</h4>
+            <span class="tag info" id="mem-tasks-count-tag">0 LOGGED</span>
+          </div>
+          <div class="quar-table-wrap mem-table-wrap">
+            <table class="quar-table cortex-table" id="mem-tasks-table">
+              <thead>
+                <tr>
+                  <th>Task ID</th>
+                  <th>Agent</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Duration</th>
+                  <th>Completed</th>
+                </tr>
+              </thead>
+              <tbody id="mem-tasks-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 4. Obsidian Vault Synchronizer -->
+        <div class="cortex-panel">
+          <div class="cortex-panel-header">
+            <h4>📓 Obsidian Vault Synchronizer</h4>
+            <span class="tag ok" id="mem-obsidian-pill">MIRROR READY</span>
+          </div>
+          <div class="mem-obsidian-details" id="mem-obsidian-details">
+            <div class="mem-vault-path-row">
+              <span class="mono bold sm-txt">Local / Container Vault:</span>
+              <span class="mono muted sm-txt" id="mem-path-local">vault/ (mounted /app/vault)</span>
+            </div>
+            <div class="mem-vault-path-row">
+              <span class="mono bold sm-txt">Host Obsidian Vault:</span>
+              <span class="mono muted sm-txt" id="mem-path-host">G:\My Drive\second-brain</span>
+            </div>
+            <div class="mem-vault-notes-list">
+              <div class="mem-vault-note-item">
+                <span class="mono text-cyan">📄 00_AIOS_OPERATIONAL_STATE.md</span>
+                <span class="muted sm-txt">Dashboard, agents roster, active blackboard [[core]]</span>
+              </div>
+              <div class="mem-vault-note-item">
+                <span class="mono text-gold">📄 01_AIOS_COMPLETED_TASKS_LOG.md</span>
+                <span class="muted sm-txt">Full chronological audit log of all sub-agent tasks</span>
+              </div>
+              <div class="mem-vault-note-item">
+                <span class="mono text-emerald">📄 02_AIOS_CROSS_AGENT_BLACKBOARD.md</span>
+                <span class="muted sm-txt">Live dictionary of shared short-term memory</span>
+              </div>
+            </div>
+            <div class="mem-sync-action-row">
+              <button class="btn sm go" type="button" id="mem-btn-force-sync">⚡ Force Vault Resync Now</button>
+              <span class="mono sm-txt muted" id="mem-last-sync-time">Last Synced: —</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- =============== SWIPE DOTS & PERSISTENT BOTTOM DOCK =============== -->
 <div class="dots" id="dots" aria-hidden="true">
   <button class="dot active" data-go="0" tabindex="-1"></button>
@@ -700,6 +982,8 @@
   <button class="dock-btn" type="button" data-drawer="tracker"><i>📋</i><span>Tracker</span></button>
   <button class="dock-btn" type="button" data-drawer="quarantine"><i>⚠️</i><span>Quarantine</span><b class="badge warn" id="badge-quarantine" hidden></b></button>
   <button class="dock-btn" type="button" data-drawer="gateway"><i>⚡</i><span>Gateway</span><b class="badge ok" id="badge-gateway" hidden></b></button>
+  <button class="dock-btn" type="button" data-drawer="cortex"><i>⚡</i><span>Cortex</span><b class="badge ok" id="badge-cortex" hidden></b></button>
+  <button class="dock-btn" type="button" data-drawer="memory"><i>🧠</i><span>Memory</span><b class="badge ok" id="badge-memory" hidden></b></button>
   <button class="dock-btn" type="button" data-sheet="alerts"><i>⚠</i><span>Alerts</span><b class="badge warn" id="badge-alerts" hidden></b></button>
   <span class="dock-sep" aria-hidden="true"></span>
   <button class="dock-btn" type="button" data-go="0"><i>◈</i><span>Obsidian</span></button>

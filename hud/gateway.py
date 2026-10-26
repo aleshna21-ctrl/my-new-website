@@ -95,6 +95,206 @@ class NonceReplayCache:
 GLOBAL_NONCE_CACHE = NonceReplayCache()
 
 
+class SyncSequenceTracker:
+    """
+    Monotonically increasing sequence tracker for real-time state synchronization
+    between HUD dashboard and Hermes. Tracks all mutations across tasks, boards, and crons.
+    """
+    def __init__(self, initial_seq: int = 1):
+        self._lock = threading.Lock()
+        self._seq = initial_seq
+        self._history: List[Dict[str, Any]] = []
+
+    def current_seq(self) -> int:
+        with self._lock:
+            return self._seq
+
+    def advance(self, scope: str, operation: str, details: Optional[Dict[str, Any]] = None) -> int:
+        with self._lock:
+            self._seq += 1
+            entry = {
+                "sequence_id": self._seq,
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "scope": scope,
+                "operation": operation,
+                "details": details or {}
+            }
+            self._history.append(entry)
+            if len(self._history) > 200:
+                self._history = self._history[-200:]
+            return self._seq
+
+    def get_history(self, since_seq: int = 0, limit: int = 50) -> List[Dict[str, Any]]:
+        with self._lock:
+            filtered = [h for h in self._history if h["sequence_id"] > since_seq]
+            return filtered[-limit:]
+
+    def reset(self, initial_seq: int = 1):
+        with self._lock:
+            self._seq = initial_seq
+            self._history.clear()
+
+
+GLOBAL_SYNC_TRACKER = SyncSequenceTracker()
+
+
+class IdempotencyRegistry:
+    """
+    Thread-safe registry for request deduplication and exact response replays.
+    Ensures network retries or transient buffers do not duplicate executions or mutations.
+    """
+    def __init__(self, ttl_seconds: float = 3600.0):
+        self._lock = threading.Lock()
+        self._store: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+        self._ttl = ttl_seconds
+
+    def get(self, key: str) -> Optional[Dict[str, Any]]:
+        if not key:
+            return None
+        now = time.monotonic()
+        with self._lock:
+            item = self._store.get(key)
+            if not item:
+                return None
+            ts, payload = item
+            if now - ts > self._ttl:
+                del self._store[key]
+                return None
+            return payload
+
+    def set(self, key: str, payload: Dict[str, Any]):
+        if not key:
+            return
+        now = time.monotonic()
+        with self._lock:
+            # Prune expired
+            expired = [k for k, (ts, _) in self._store.items() if now - ts > self._ttl]
+            for k in expired:
+                del self._store[k]
+            self._store[key] = (now, payload)
+
+    def clear(self):
+        with self._lock:
+            self._store.clear()
+
+
+GLOBAL_IDEMPOTENCY_REGISTRY = IdempotencyRegistry()
+
+
+class GatewayFeedbackLoop:
+    """
+    Dynamic feedback loop monitoring round-trip latency, buffering status,
+    and heartbeats between AIOS HUD and Hermes.
+    """
+    def __init__(self, buffer_size: int = 50):
+        self._lock = threading.Lock()
+        self._buffer_size = buffer_size
+        self._rtt_samples: List[float] = []
+        self._last_heartbeat_utc: Optional[str] = None
+        self._total_requests: int = 0
+        self._failed_requests: int = 0
+
+    def record_probe(self, rtt_ms: float, success: bool = True):
+        with self._lock:
+            self._total_requests += 1
+            if not success:
+                self._failed_requests += 1
+            self._rtt_samples.append(round(rtt_ms, 2))
+            if len(self._rtt_samples) > self._buffer_size:
+                self._rtt_samples = self._rtt_samples[-self._buffer_size:]
+            self._last_heartbeat_utc = datetime.now(timezone.utc).isoformat()
+
+    def get_metrics(self) -> Dict[str, Any]:
+        with self._lock:
+            samples = list(self._rtt_samples)
+            last_hb = self._last_heartbeat_utc
+            tot = self._total_requests
+            fail = self._failed_requests
+
+        if not samples:
+            return {
+                "latest_rtt_ms": 0.0,
+                "p50_rtt_ms": 0.0,
+                "p95_rtt_ms": 0.0,
+                "min_rtt_ms": 0.0,
+                "max_rtt_ms": 0.0,
+                "sample_count": 0,
+                "sync_health": "STANDBY",
+                "last_heartbeat_utc": last_hb,
+                "total_probes": tot,
+                "failed_probes": fail
+            }
+
+        sorted_samples = sorted(samples)
+        n = len(sorted_samples)
+        p50 = sorted_samples[int(n * 0.5)]
+        p95 = sorted_samples[min(int(n * 0.95), n - 1)]
+        latest = samples[-1]
+
+        if fail > 0 and (fail / max(tot, 1)) > 0.2:
+            health = "DEGRADED"
+        elif p95 > 150.0:
+            health = "BUFFERED_WARN"
+        elif p95 > 50.0:
+            health = "ACCEPTABLE"
+        else:
+            health = "OPTIMAL_REALTIME"
+
+        return {
+            "latest_rtt_ms": latest,
+            "p50_rtt_ms": p50,
+            "p95_rtt_ms": p95,
+            "min_rtt_ms": sorted_samples[0],
+            "max_rtt_ms": sorted_samples[-1],
+            "sample_count": n,
+            "sync_health": health,
+            "last_heartbeat_utc": last_hb,
+            "total_probes": tot,
+            "failed_probes": fail
+        }
+
+    def clear(self):
+        with self._lock:
+            self._rtt_samples.clear()
+            self._total_requests = 0
+            self._failed_requests = 0
+            self._last_heartbeat_utc = None
+
+
+GLOBAL_FEEDBACK_LOOP = GatewayFeedbackLoop()
+
+
+def make_ack_receipt(
+    status: str = "ACK",
+    scope: str = "general",
+    op: str = "execute",
+    result: Any = None,
+    error: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
+    rtt_ms: Optional[float] = None
+) -> Dict[str, Any]:
+    """Constructs a strict, sequenced acknowledgement receipt for gateway events."""
+    import uuid
+    seq = GLOBAL_SYNC_TRACKER.advance(scope, op, {"status": status, "idempotency_key": idempotency_key})
+    ack_id = f"ack-{uuid.uuid4().hex[:12]}"
+    receipt = {
+        "ack_id": ack_id,
+        "status": status,
+        "sequence_id": seq,
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "scope": scope,
+        "op": op,
+        "idempotency_key": idempotency_key,
+        "round_trip_ms": rtt_ms,
+        "synced": (status == "ACK"),
+        "result": result,
+        "error": error
+    }
+    if idempotency_key:
+        GLOBAL_IDEMPOTENCY_REGISTRY.set(idempotency_key, receipt)
+    return receipt
+
+
 def compute_body_sha256(body: bytes | str | None) -> str:
     if body is None:
         raw = b""
@@ -171,25 +371,32 @@ def verify_gateway_request(headers: Dict[str, str], method: str, path: str, body
 
 
 def create_signed_headers(method: str, path: str, body: bytes | str | None,
-                          secret: str = DEFAULT_GATEWAY_SECRET) -> Dict[str, str]:
+                          secret: str = DEFAULT_GATEWAY_SECRET,
+                          idempotency_key: Optional[str] = None) -> Dict[str, str]:
     """Generates authentication headers for an outgoing two-way gateway request."""
     import uuid
     ts = str(int(time.time()))
     nonce = uuid.uuid4().hex
     sig = compute_signature(secret, method, path, body, ts, nonce)
-    return {
+    headers = {
         "Content-Type": "application/json",
         "X-Gateway-Timestamp": ts,
         "X-Gateway-Nonce": nonce,
         "X-Gateway-Signature": sig,
-        "Authorization": f"Bearer {secret}"
+        "Authorization": f"Bearer {secret}",
+        "X-Accel-Buffering": "no",
+        "Cache-Control": "no-cache, no-transform, no-store"
     }
+    if idempotency_key:
+        headers["X-Idempotency-Key"] = str(idempotency_key)
+    return headers
 
 
 def send_signed_rpc(target_url: str, method: str, params: Dict[str, Any],
                     secret: str = DEFAULT_GATEWAY_SECRET,
-                    timeout: float = 10.0) -> Dict[str, Any]:
-    """Sends a signed JSON-RPC 2.0 request across the gateway over HTTP."""
+                    timeout: float = 10.0,
+                    idempotency_key: Optional[str] = None) -> Dict[str, Any]:
+    """Sends a signed JSON-RPC 2.0 request across the gateway over HTTP with RTT feedback tracking."""
     import uuid
     req_id = f"rpc-{uuid.uuid4().hex[:10]}"
     payload = {
@@ -199,28 +406,46 @@ def send_signed_rpc(target_url: str, method: str, params: Dict[str, Any],
         "params": params,
         "timestamp_utc": datetime.now(timezone.utc).isoformat()
     }
+    if idempotency_key:
+        payload["idempotency_key"] = idempotency_key
+
     raw_body = json.dumps(payload, indent=2).encode("utf-8")
 
     from urllib.parse import urlsplit
     url_parts = urlsplit(target_url)
     req_path = url_parts.path or "/"
 
-    headers = create_signed_headers("POST", req_path, raw_body, secret)
+    headers = create_signed_headers("POST", req_path, raw_body, secret, idempotency_key=idempotency_key)
     req = urllib.request.Request(target_url, data=raw_body, headers=headers, method="POST")
 
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    t0 = time.monotonic()
     try:
         with opener.open(req, timeout=timeout) as resp:
+            rtt_ms = max(round((time.monotonic() - t0) * 1000, 2), 0.01)
+            GLOBAL_FEEDBACK_LOOP.record_probe(rtt_ms, success=True)
             data = resp.read().decode("utf-8")
-            return json.loads(data)
+            parsed = json.loads(data)
+            if isinstance(parsed, dict):
+                parsed["round_trip_ms"] = rtt_ms
+                if "ack" in parsed and isinstance(parsed["ack"], dict):
+                    parsed["ack"]["round_trip_ms"] = rtt_ms
+            return parsed
     except urllib.error.HTTPError as he:
+        rtt_ms = max(round((time.monotonic() - t0) * 1000, 2), 0.01)
+        GLOBAL_FEEDBACK_LOOP.record_probe(rtt_ms, success=False)
         err_msg = he.read().decode("utf-8", errors="replace")
         try:
-            return json.loads(err_msg)
+            parsed_err = json.loads(err_msg)
+            if isinstance(parsed_err, dict):
+                parsed_err["round_trip_ms"] = rtt_ms
+            return parsed_err
         except Exception:
-            return {"jsonrpc": "2.0", "id": req_id, "error": {"code": he.code, "message": err_msg}}
+            return {"jsonrpc": "2.0", "id": req_id, "error": {"code": he.code, "message": err_msg}, "round_trip_ms": rtt_ms}
     except Exception as exc:
-        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(exc)}}
+        rtt_ms = max(round((time.monotonic() - t0) * 1000, 2), 0.01)
+        GLOBAL_FEEDBACK_LOOP.record_probe(rtt_ms, success=False)
+        return {"jsonrpc": "2.0", "id": req_id, "error": {"code": -32000, "message": str(exc)}, "round_trip_ms": rtt_ms}
 
 
 # --------------------------------------------------------------------------- #
@@ -348,6 +573,8 @@ def update_cron_job(cron_id: str, updates: Dict[str, Any], path: Path = CRON_REG
                 target[k] = updates[k]
 
     save_cron_registry(crons, path)
+    seq = GLOBAL_SYNC_TRACKER.advance("cron", "update", {"cron_id": target.get("id")})
+    target["sequence_id"] = seq
     return target
 
 
@@ -356,6 +583,7 @@ def delete_cron_job(cron_id: str, path: Path = CRON_REGISTRY_PATH) -> bool:
     filtered = [c for c in crons if c.get("id") != cron_id]
     if len(filtered) != len(crons):
         save_cron_registry(filtered, path)
+        GLOBAL_SYNC_TRACKER.advance("cron", "delete", {"cron_id": cron_id})
         return True
     return False
 
@@ -376,12 +604,14 @@ def trigger_cron_job(cron_id: str, path: Path = CRON_REGISTRY_PATH) -> Dict[str,
     target["last_run_utc"] = now_utc
     target["last_outcome"] = f"{status_str}: {outcome.get('result', {}).get('summary', 'Executed')}"
     save_cron_registry(crons, path)
+    seq = GLOBAL_SYNC_TRACKER.advance("cron", "trigger", {"cron_id": cron_id, "status": status_str})
 
     return {
         "cron_id": cron_id,
         "name": target.get("name"),
         "triggered_at": now_utc,
         "status": status_str,
+        "sequence_id": seq,
         "outcome": outcome
     }
 
@@ -427,8 +657,14 @@ def record_task_history(record: Dict[str, Any], path: Path | None = None):
 
 
 def execute_task_command(command: str, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Executes a pre-calibrated command or inference action across the system."""
+    """Executes a pre-calibrated command or inference action across the system with strict ACK."""
     import uuid
+    idemp_key = params.get("idempotency_key")
+    if idemp_key:
+        cached = GLOBAL_IDEMPOTENCY_REGISTRY.get(idemp_key)
+        if cached is not None:
+            return cached
+
     task_id = f"task-cmd-{uuid.uuid4().hex[:8]}"
     start_time = time.monotonic()
     now_utc = datetime.now(timezone.utc).isoformat()
@@ -516,6 +752,19 @@ def execute_task_command(command: str, params: Dict[str, Any]) -> Dict[str, Any]
         error_msg = str(exc)
 
     duration_ms = round((time.monotonic() - start_time) * 1000, 2)
+    GLOBAL_FEEDBACK_LOOP.record_probe(duration_ms, success=(error_msg is None))
+    seq_id = GLOBAL_SYNC_TRACKER.advance("task", cmd, {"status": "failed" if error_msg else "completed"})
+
+    ack_receipt = {
+        "ack_id": f"ack-{uuid.uuid4().hex[:12]}",
+        "status": "NACK" if error_msg else "ACK",
+        "sequence_id": seq_id,
+        "timestamp_utc": now_utc,
+        "round_trip_ms": duration_ms,
+        "idempotency_key": idemp_key,
+        "synced": (error_msg is None)
+    }
+
     record = {
         "task_id": task_id,
         "command": cmd,
@@ -524,8 +773,12 @@ def execute_task_command(command: str, params: Dict[str, Any]) -> Dict[str, Any]
         "result": result_data,
         "error": error_msg,
         "executed_at": now_utc,
-        "duration_ms": duration_ms
+        "duration_ms": duration_ms,
+        "sequence_id": seq_id,
+        "ack": ack_receipt
     }
+    if idemp_key:
+        GLOBAL_IDEMPOTENCY_REGISTRY.set(idemp_key, record)
     record_task_history(record)
     return record
 
@@ -536,29 +789,96 @@ def execute_task_command(command: str, params: Dict[str, Any]) -> Dict[str, Any]
 def execute_gateway_rpc(method: str, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Core entry point executing JSON-RPC 2.0 methods across task commands,
-    Kanban board management, and cron job updates.
+    Kanban board management, and cron job updates with strict ACK loops.
     """
+    import uuid
+    idemp_key = params.get("idempotency_key")
+    if idemp_key:
+        cached = GLOBAL_IDEMPOTENCY_REGISTRY.get(idemp_key)
+        if cached is not None:
+            return {"result": cached, "idempotent_replay": True, "ack": cached.get("ack") if isinstance(cached, dict) else None}
+
     method_name = str(method or "").strip()
 
     # 1. Health & Ping
     if method_name in ("hermes.ping", "ping"):
+        seq = GLOBAL_SYNC_TRACKER.current_seq()
+        ack = {
+            "ack_id": f"ack-{uuid.uuid4().hex[:12]}",
+            "status": "ACK",
+            "sequence_id": seq,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "synced": True
+        }
         return {
             "result": {
                 "service": "hermes-aios-gateway",
                 "authenticated": True,
                 "protocol": "JSON-RPC 2.0 / REST Webhook",
                 "auth_method": "HMAC-SHA256 (Anti-Replay Nonce + Timestamp)",
-                "timestamp_utc": datetime.now(timezone.utc).isoformat()
-            }
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "sequence_id": seq,
+                "feedback": GLOBAL_FEEDBACK_LOOP.get_metrics()
+            },
+            "ack": ack
         }
 
-    # 2. Task Commands
+    # 2. Sync Status & Feedback Loop Query
+    elif method_name in ("hermes.gateway.sync_status", "hermes.sync.status"):
+        since_seq = int(params.get("since_seq", 0))
+        limit = int(params.get("limit", 50))
+        seq = GLOBAL_SYNC_TRACKER.current_seq()
+        ack = {
+            "ack_id": f"ack-{uuid.uuid4().hex[:12]}",
+            "status": "ACK",
+            "sequence_id": seq,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "synced": True
+        }
+        return {
+            "result": {
+                "service": "hermes-aios-gateway",
+                "sequence_id": seq,
+                "feedback": GLOBAL_FEEDBACK_LOOP.get_metrics(),
+                "history": GLOBAL_SYNC_TRACKER.get_history(since_seq=since_seq, limit=limit),
+                "in_sync": (since_seq == 0 or since_seq >= seq),
+                "timestamp_utc": datetime.now(timezone.utc).isoformat()
+            },
+            "ack": ack
+        }
+
+    # 3. Asynchronous Worker Acknowledgement Report
+    elif method_name in ("hermes.gateway.ack", "hermes.ack.report"):
+        ack_id = params.get("ack_id")
+        task_id = params.get("task_id")
+        worker_state = params.get("state", "acknowledged")
+        seq = GLOBAL_SYNC_TRACKER.advance("worker_ack", task_id or "async", {"ack_id": ack_id, "state": worker_state})
+        ack = {
+            "ack_id": ack_id or f"ack-{uuid.uuid4().hex[:12]}",
+            "status": "ACK",
+            "sequence_id": seq,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "synced": True
+        }
+        return {
+            "result": {
+                "status": "ok",
+                "acknowledged": True,
+                "ack_id": ack_id,
+                "sequence_id": seq,
+                "timestamp_utc": datetime.now(timezone.utc).isoformat()
+            },
+            "ack": ack
+        }
+
+    # 4. Task Commands
     elif method_name == "hermes.task.execute":
         cmd = params.get("command") or params.get("cmd", "ping")
         record = execute_task_command(cmd, params)
+        ack = record.get("ack")
         if record.get("status") == "failed":
-            return {"error": {"code": -32001, "message": record.get("error", "Task execution failed")}, "result": record}
-        return {"result": record}
+            return {"error": {"code": -32001, "message": record.get("error", "Task execution failed")}, "result": record, "ack": ack}
+        return {"result": record, "ack": ack}
 
     elif method_name == "hermes.task.status":
         task_id = params.get("task_id")
@@ -566,18 +886,28 @@ def execute_gateway_rpc(method: str, params: Dict[str, Any]) -> Dict[str, Any]:
         match = next((t for t in history if t.get("task_id") == task_id), None)
         if not match:
             return {"error": {"code": -32602, "message": f"Task '{task_id}' not found"}}
-        return {"result": match}
+        return {"result": match, "ack": match.get("ack")}
 
     elif method_name == "hermes.task.list":
         limit = int(params.get("limit", 50))
-        return {"result": {"tasks": load_task_history(limit=limit)}}
+        return {
+            "result": {
+                "tasks": load_task_history(limit=limit),
+                "sequence_id": GLOBAL_SYNC_TRACKER.current_seq()
+            }
+        }
 
-    # 3. Kanban Board Management
+    # 5. Kanban Board Management
     elif method_name == "hermes.board.get":
         from hud import os_dashboard as osd
         bpath = params.get("board_path") or osd.BOARD_PATH
         board = osd.load_board(bpath)
-        return {"result": {"board": board}}
+        return {
+            "result": {
+                "board": board,
+                "sequence_id": GLOBAL_SYNC_TRACKER.current_seq()
+            }
+        }
 
     elif method_name == "hermes.board.mutate":
         from hud import os_dashboard as osd
@@ -585,7 +915,17 @@ def execute_gateway_rpc(method: str, params: Dict[str, Any]) -> Dict[str, Any]:
         bpath = params.get("board_path") or osd.BOARD_PATH
         try:
             res = osd.apply_board_op(op, path=bpath)
-            return {"result": {"status": "ok", "board": res}}
+            seq = GLOBAL_SYNC_TRACKER.advance("board", op.get("op", "mutate"), {"title": op.get("title")})
+            ack = {
+                "ack_id": f"ack-{uuid.uuid4().hex[:12]}",
+                "status": "ACK",
+                "sequence_id": seq,
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "synced": True
+            }
+            if idemp_key:
+                GLOBAL_IDEMPOTENCY_REGISTRY.set(idemp_key, {"status": "ok", "board": res, "ack": ack})
+            return {"result": {"status": "ok", "board": res, "sequence_id": seq}, "ack": ack}
         except Exception as exc:
             return {"error": {"code": -32002, "message": f"Board mutation failed: {exc}"}}
 
@@ -611,36 +951,72 @@ def execute_gateway_rpc(method: str, params: Dict[str, Any]) -> Dict[str, Any]:
                     except Exception:
                         pass
         updated_board = osd.load_board(bpath)
+        seq = GLOBAL_SYNC_TRACKER.advance("board", "sync", {"synced_count": synced_count})
+        ack = {
+            "ack_id": f"ack-{uuid.uuid4().hex[:12]}",
+            "status": "ACK",
+            "sequence_id": seq,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "synced": True
+        }
+        res_data = {
+            "status": "ok",
+            "synced_count": synced_count,
+            "total_tasks": len(updated_board.get("tasks", [])),
+            "uncompleted": [t for t in updated_board.get("tasks", []) if t.get("status") != "done"],
+            "sequence_id": seq
+        }
+        if idemp_key:
+            GLOBAL_IDEMPOTENCY_REGISTRY.set(idemp_key, res_data)
+        return {"result": res_data, "ack": ack}
+
+    # 6. Cron Job Updates
+    elif method_name == "hermes.cron.list":
         return {
             "result": {
-                "status": "ok",
-                "synced_count": synced_count,
-                "total_tasks": len(updated_board.get("tasks", [])),
-                "uncompleted": [t for t in updated_board.get("tasks", []) if t.get("status") != "done"]
+                "crons": load_cron_registry(),
+                "sequence_id": GLOBAL_SYNC_TRACKER.current_seq()
             }
         }
-
-    # 4. Cron Job Updates
-    elif method_name == "hermes.cron.list":
-        return {"result": {"crons": load_cron_registry()}}
 
     elif method_name == "hermes.cron.update":
         cron_id = params.get("id") or params.get("cron_id")
         updated = update_cron_job(cron_id, params)
-        return {"result": {"status": "ok", "cron": updated}}
+        ack = {
+            "ack_id": f"ack-{uuid.uuid4().hex[:12]}",
+            "status": "ACK",
+            "sequence_id": updated.get("sequence_id", GLOBAL_SYNC_TRACKER.current_seq()),
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "synced": True
+        }
+        return {"result": {"status": "ok", "cron": updated}, "ack": ack}
 
     elif method_name == "hermes.cron.trigger":
         cron_id = params.get("id") or params.get("cron_id")
         try:
             outcome = trigger_cron_job(cron_id)
-            return {"result": outcome}
+            ack = {
+                "ack_id": f"ack-{uuid.uuid4().hex[:12]}",
+                "status": "ACK",
+                "sequence_id": outcome.get("sequence_id", GLOBAL_SYNC_TRACKER.current_seq()),
+                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "synced": True
+            }
+            return {"result": outcome, "ack": ack}
         except Exception as exc:
             return {"error": {"code": -32003, "message": f"Trigger failed: {exc}"}}
 
     elif method_name == "hermes.cron.delete":
         cron_id = params.get("id") or params.get("cron_id")
         deleted = delete_cron_job(cron_id)
-        return {"result": {"status": "ok" if deleted else "not_found", "deleted": deleted}}
+        ack = {
+            "ack_id": f"ack-{uuid.uuid4().hex[:12]}",
+            "status": "ACK" if deleted else "NACK",
+            "sequence_id": GLOBAL_SYNC_TRACKER.current_seq(),
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+            "synced": bool(deleted)
+        }
+        return {"result": {"status": "ok" if deleted else "not_found", "deleted": deleted}, "ack": ack}
 
     else:
         return {"error": {"code": -32601, "message": f"Method '{method_name}' not recognized by gateway."}}

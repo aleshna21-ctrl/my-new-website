@@ -22,21 +22,30 @@ DEFAULT_MODEL = os.environ.get("HERMES_DEFAULT_MODEL", "qwen3:4b")
 class HermesModelHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
-    def _send_json(self, data, status=200):
+    def _send_json(self, data, status=200, ack_id=None, seq_id=None, rtt_ms=None):
         body = json.dumps(data, indent=2).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Gateway-Timestamp, X-Gateway-Nonce, X-Gateway-Signature, X-Idempotency-Key")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("Cache-Control", "no-cache, no-transform, no-store, private")
+        if ack_id:
+            self.send_header("X-Gateway-Ack", str(ack_id))
+        if seq_id:
+            self.send_header("X-Gateway-Seq", str(seq_id))
+        if rtt_ms is not None:
+            self.send_header("X-Gateway-RTT", str(rtt_ms))
         self.end_headers()
         self.wfile.write(body)
+        self.wfile.flush()
 
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Gateway-Timestamp, X-Gateway-Nonce, X-Gateway-Signature, X-Idempotency-Key")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.end_headers()
 
@@ -86,6 +95,21 @@ class HermesModelHandler(http.server.BaseHTTPRequestHandler):
             })
             return
 
+        if path in ("/gateway/v1/sync", "/gateway/v1/feedback"):
+            try:
+                from hud.gateway import GLOBAL_SYNC_TRACKER, GLOBAL_FEEDBACK_LOOP
+                self._send_json({
+                    "status": "ok",
+                    "service": "hermes-gateway-daemon",
+                    "sequence_id": GLOBAL_SYNC_TRACKER.current_seq(),
+                    "feedback": GLOBAL_FEEDBACK_LOOP.get_metrics(),
+                    "history": GLOBAL_SYNC_TRACKER.get_history(limit=25),
+                    "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+                })
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
+            return
+
         if path.startswith("/gateway/v1/crons"):
             try:
                 from hud.gateway import load_cron_registry
@@ -105,6 +129,7 @@ class HermesModelHandler(http.server.BaseHTTPRequestHandler):
         self._send_json({"error": "Not found", "path": self.path}, 404)
 
     def do_POST(self):
+        start_t = time.monotonic()
         path, _, _ = self.path.partition("?")
         content_len = int(self.headers.get("Content-Length", 0))
         raw_body = self.rfile.read(content_len) if content_len > 0 else b"{}"
@@ -141,38 +166,63 @@ class HermesModelHandler(http.server.BaseHTTPRequestHandler):
                 }, 400)
                 return
 
+            idemp_key = self.headers.get("X-Idempotency-Key") or body_json.get("idempotency_key")
+            if idemp_key and "idempotency_key" not in body_json:
+                body_json["idempotency_key"] = idemp_key
+
             if path == "/gateway/v1/rpc":
                 req_id = body_json.get("id")
                 method = body_json.get("method", "")
                 params = body_json.get("params", {})
+                if idemp_key and "idempotency_key" not in params:
+                    params["idempotency_key"] = idemp_key
+
                 rpc_res = execute_gateway_rpc(method, params)
+                rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
+                ack = rpc_res.get("ack")
                 out = {
                     "jsonrpc": "2.0",
                     "id": req_id,
                     "result": rpc_res.get("result"),
                     "error": rpc_res.get("error"),
-                    "status": "error" if rpc_res.get("error") else "ok"
+                    "status": "error" if rpc_res.get("error") else "ok",
+                    "ack": ack,
+                    "round_trip_ms": rtt_ms
                 }
                 status_code = 400 if rpc_res.get("error") else 200
-                self._send_json(out, status_code)
+                ack_id = ack.get("ack_id") if ack else None
+                seq_id = ack.get("sequence_id") if ack else None
+                self._send_json(out, status_code, ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
                 return
 
             elif path == "/gateway/v1/tasks":
                 cmd = body_json.get("command") or body_json.get("cmd", "ping")
                 params = body_json.get("params", body_json)
+                if idemp_key and "idempotency_key" not in params:
+                    params["idempotency_key"] = idemp_key
                 res = execute_task_command(cmd, params)
-                self._send_json({"status": "ok", "task": res})
+                rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
+                ack = res.get("ack")
+                ack_id = ack.get("ack_id") if ack else None
+                seq_id = ack.get("sequence_id") if ack else None
+                self._send_json({"status": "ok", "task": res, "ack": ack, "round_trip_ms": rtt_ms},
+                                200, ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
                 return
 
             elif path == "/gateway/v1/crons":
                 action = body_json.get("action", "update")
                 cron_id = body_json.get("id") or body_json.get("cron_id")
+                rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
                 if action == "trigger":
                     res = trigger_cron_job(cron_id)
-                    self._send_json({"status": "ok", "triggered": res})
+                    seq_id = res.get("sequence_id")
+                    self._send_json({"status": "ok", "triggered": res, "round_trip_ms": rtt_ms},
+                                    200, seq_id=seq_id, rtt_ms=rtt_ms)
                 else:
                     res = update_cron_job(cron_id, body_json)
-                    self._send_json({"status": "ok", "cron": res})
+                    seq_id = res.get("sequence_id")
+                    self._send_json({"status": "ok", "cron": res, "round_trip_ms": rtt_ms},
+                                    200, seq_id=seq_id, rtt_ms=rtt_ms)
                 return
 
             self._send_json({"error": "Unknown gateway endpoint"}, 404)

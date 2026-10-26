@@ -291,6 +291,136 @@ class HTTPGatewayIntegrationTests(unittest.TestCase):
         self.assertEqual(webhook_res.get("status"), "ok")
         self.assertTrue(webhook_res.get("result", {}).get("authenticated"))
 
+        # 4. GET /api/gateway/feedback
+        fb_url = f"http://127.0.0.1:{self.hud_port}/api/gateway/feedback"
+        with urllib.request.urlopen(fb_url, timeout=3) as resp:
+            self.assertEqual(resp.status, 200)
+            fb_data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(fb_data["status"], "ok")
+            self.assertIn("sequence_id", fb_data)
+            self.assertIn("feedback", fb_data)
+
+    def test_http_ack_headers_and_anti_buffering(self):
+        import urllib.request
+        url = f"http://127.0.0.1:{self.hermes_port}/gateway/v1/rpc"
+        res = gateway.send_signed_rpc(url, "hermes.task.execute", {"command": "ping"}, idempotency_key="idemp-http-test-01")
+        self.assertEqual(res.get("status"), "ok")
+        self.assertIn("ack", res)
+        self.assertEqual(res["ack"]["status"], "ACK")
+        self.assertTrue(res["ack"]["synced"])
+        self.assertIn("round_trip_ms", res)
+        self.assertGreater(res["round_trip_ms"], 0.0)
+
+        # Direct HTTP header verification
+        req_body = json.dumps({"jsonrpc": "2.0", "id": "direct-head", "method": "hermes.ping", "params": {}}).encode("utf-8")
+        headers = gateway.create_signed_headers("POST", "/gateway/v1/rpc", req_body)
+        req = urllib.request.Request(url, data=req_body, headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            self.assertEqual(resp.status, 200)
+            self.assertEqual(resp.headers.get("X-Accel-Buffering"), "no")
+            self.assertIn("no-store", resp.headers.get("Cache-Control", ""))
+            self.assertTrue(resp.headers.get("X-Gateway-Ack") is not None)
+            self.assertTrue(resp.headers.get("X-Gateway-Seq") is not None)
+            self.assertTrue(resp.headers.get("X-Gateway-RTT") is not None)
+
+
+class HermesGatewayAckAndSyncUnitTests(unittest.TestCase):
+    """Specific unit tests for sequence tracker, idempotency, feedback loop, and ACK receipts."""
+    def setUp(self):
+        self.tracker = gateway.SyncSequenceTracker(initial_seq=10)
+        self.idemp = gateway.IdempotencyRegistry(ttl_seconds=60.0)
+        self.loop = gateway.GatewayFeedbackLoop(buffer_size=10)
+
+    def test_sync_sequence_tracker_advances_monotonically_and_tracks_history(self):
+        self.assertEqual(self.tracker.current_seq(), 10)
+        s1 = self.tracker.advance("task", "run_audit", {"target": "invariants"})
+        self.assertEqual(s1, 11)
+        s2 = self.tracker.advance("board", "mutate_add", {"title": "Task A"})
+        self.assertEqual(s2, 12)
+        self.assertEqual(self.tracker.current_seq(), 12)
+
+        history = self.tracker.get_history(since_seq=10)
+        self.assertEqual(len(history), 2)
+        self.assertEqual(history[0]["sequence_id"], 11)
+        self.assertEqual(history[0]["scope"], "task")
+        self.assertEqual(history[1]["sequence_id"], 12)
+        self.assertEqual(history[1]["scope"], "board")
+
+    def test_idempotency_registry_caching_and_replay(self):
+        test_key = "idemp-unit-key-42"
+        self.assertIsNone(self.idemp.get(test_key))
+
+        mock_payload = {"ack_id": "ack-12345", "status": "ACK", "sequence_id": 15}
+        self.idemp.set(test_key, mock_payload)
+
+        cached = self.idemp.get(test_key)
+        self.assertIsNotNone(cached)
+        self.assertEqual(cached["ack_id"], "ack-12345")
+
+        # Test in execute_gateway_rpc
+        gateway.GLOBAL_IDEMPOTENCY_REGISTRY.set("idemp-rpc-test", {"result": "cached-ok", "ack": {"status": "ACK"}})
+        replay_res = gateway.execute_gateway_rpc("hermes.ping", {"idempotency_key": "idemp-rpc-test"})
+        self.assertTrue(replay_res.get("idempotent_replay"))
+        self.assertEqual(replay_res["result"], {"result": "cached-ok", "ack": {"status": "ACK"}})
+
+    def test_gateway_feedback_loop_rtt_metrics(self):
+        # Empty loop
+        empty_metrics = self.loop.get_metrics()
+        self.assertEqual(empty_metrics["sync_health"], "STANDBY")
+        self.assertEqual(empty_metrics["sample_count"], 0)
+
+        # Record samples
+        for rtt in [5.0, 10.0, 12.0, 8.0, 15.0]:
+            self.loop.record_probe(rtt, success=True)
+
+        m = self.loop.get_metrics()
+        self.assertEqual(m["sample_count"], 5)
+        self.assertEqual(m["latest_rtt_ms"], 15.0)
+        self.assertEqual(m["min_rtt_ms"], 5.0)
+        self.assertEqual(m["max_rtt_ms"], 15.0)
+        self.assertEqual(m["sync_health"], "OPTIMAL_REALTIME")
+
+        # Buffer overflow test
+        for i in range(20):
+            self.loop.record_probe(float(i), success=True)
+        m_over = self.loop.get_metrics()
+        self.assertEqual(m_over["sample_count"], 10)  # capped at buffer_size 10
+
+    def test_strict_ack_receipt_structure(self):
+        receipt = gateway.make_ack_receipt(
+            status="ACK",
+            scope="task",
+            op="execute",
+            result={"status": "completed"},
+            idempotency_key="idemp-receipt-test",
+            rtt_ms=4.2
+        )
+        self.assertTrue(receipt["ack_id"].startswith("ack-"))
+        self.assertEqual(receipt["status"], "ACK")
+        self.assertTrue(receipt["synced"])
+        self.assertEqual(receipt["round_trip_ms"], 4.2)
+        self.assertIn("sequence_id", receipt)
+        self.assertEqual(receipt["idempotency_key"], "idemp-receipt-test")
+
+    def test_sync_status_and_worker_ack_rpc(self):
+        # 1. hermes.gateway.sync_status
+        sync_res = gateway.execute_gateway_rpc("hermes.gateway.sync_status", {})
+        self.assertIn("result", sync_res)
+        self.assertIn("sequence_id", sync_res["result"])
+        self.assertIn("feedback", sync_res["result"])
+        self.assertIn("history", sync_res["result"])
+        self.assertIn("ack", sync_res)
+
+        # 2. hermes.gateway.ack
+        ack_res = gateway.execute_gateway_rpc("hermes.gateway.ack", {
+            "ack_id": "ack-worker-999",
+            "task_id": "task-test-1",
+            "state": "completed"
+        })
+        self.assertEqual(ack_res["result"]["status"], "ok")
+        self.assertTrue(ack_res["result"]["acknowledged"])
+        self.assertEqual(ack_res["result"]["ack_id"], "ack-worker-999")
+
 
 if __name__ == "__main__":
     unittest.main()

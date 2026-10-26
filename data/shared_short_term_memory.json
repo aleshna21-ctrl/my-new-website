@@ -1,0 +1,475 @@
+{
+  "epoch": 19,
+  "saved_at_utc": "2026-10-26T07:45:53.733116+00:00",
+  "agents": {
+    "agent-supervisor": {
+      "agent_id": "agent-supervisor",
+      "role": "multi_agent_coordinator",
+      "operational_state": "idle",
+      "current_task_id": null,
+      "last_heartbeat_utc": "2026-10-26T07:45:41.341309+00:00",
+      "capabilities": [
+        "orchestration",
+        "consensus",
+        "state_transition",
+        "vault_sync"
+      ],
+      "meta": {
+        "tier": 1,
+        "description": "AIOS Multi-Agent Supervisor & Ring-0 Governance"
+      }
+    },
+    "agent-hermes-gateway": {
+      "agent_id": "agent-hermes-gateway",
+      "role": "rpc_gateway",
+      "operational_state": "idle",
+      "current_task_id": null,
+      "last_heartbeat_utc": "2026-10-26T07:45:53.027911+00:00",
+      "capabilities": [
+        "hmac_signing",
+        "model_inference",
+        "anti_buffering",
+        "qwen_orchestration"
+      ],
+      "meta": {
+        "tier": 2,
+        "description": "Hermes Two-Way API Gateway (:8080 Signed RPC)"
+      }
+    },
+    "agent-diagnostic-probe": {
+      "agent_id": "agent-diagnostic-probe",
+      "role": "health_probe",
+      "operational_state": "idle",
+      "current_task_id": null,
+      "last_heartbeat_utc": "2026-10-26T07:45:53.733116+00:00",
+      "capabilities": [
+        "network_probe",
+        "rtt_telemetry"
+      ],
+      "meta": {
+        "tier": 2,
+        "description": "Multi-Diagnostic Probes & Latency Feedback Loop"
+      }
+    },
+    "agent-invoice-ingestion": {
+      "agent_id": "agent-invoice-ingestion",
+      "role": "diode_ingestion",
+      "operational_state": "idle",
+      "current_task_id": null,
+      "last_heartbeat_utc": "2026-10-26T07:45:53.636533+00:00",
+      "capabilities": [
+        "csv_cleanse",
+        "strict_str_money",
+        "zero_loss",
+        "ap_posting"
+      ],
+      "meta": {
+        "tier": 3,
+        "description": "Finance AP Ingestion Pipeline & Penny Governance"
+      }
+    },
+    "agent-sow-worker": {
+      "agent_id": "agent-sow-worker",
+      "role": "pipeline_worker",
+      "operational_state": "idle",
+      "current_task_id": null,
+      "last_heartbeat_utc": "2026-10-26T07:28:54.295163+00:00",
+      "capabilities": [
+        "risk_extraction",
+        "sow_validation",
+        "semantic_scout",
+        "cheap_read"
+      ],
+      "meta": {
+        "tier": 3,
+        "description": "SOW Discovery Pipeline Worker & Risk Guard Role"
+      }
+    },
+    "agent-quarantine-guard": {
+      "agent_id": "agent-quarantine-guard",
+      "role": "invariant_auditor",
+      "operational_state": "idle",
+      "current_task_id": null,
+      "last_heartbeat_utc": "2026-10-26T07:28:54.295163+00:00",
+      "capabilities": [
+        "penny_reconciliation",
+        "auto_recovery",
+        "diode_seal",
+        "zero_loss_audit"
+      ],
+      "meta": {
+        "tier": 4,
+        "description": "Zero-Loss Ledger Invariant Guard & Quarantine Auto-Recovery"
+      }
+    }
+  },
+  "blackboard": {
+    "active_pipeline_stage": {
+      "key": "active_pipeline_stage",
+      "value": "IDLE_MONITORING",
+      "writer_agent_id": "agent-supervisor",
+      "version": 1,
+      "ttl_seconds": null,
+      "created_at_utc": "2026-10-26T07:28:54.295163+00:00",
+      "updated_at_utc": "2026-10-26T07:28:54.295163+00:00",
+      "expires_at_epoch": null
+    },
+    "zero_loss_invariant_status": {
+      "key": "zero_loss_invariant_status",
+      "value": "ENFORCED_ZERO_LOSS",
+      "writer_agent_id": "agent-quarantine-guard",
+      "version": 1,
+      "ttl_seconds": null,
+      "created_at_utc": "2026-10-26T07:28:54.295163+00:00",
+      "updated_at_utc": "2026-10-26T07:28:54.295163+00:00",
+      "expires_at_epoch": null
+    },
+    "hermes_model_readiness": {
+      "key": "hermes_model_readiness",
+      "value": "QWEN3:4B_LOCAL_READY",
+      "writer_agent_id": "agent-hermes-gateway",
+      "version": 1,
+      "ttl_seconds": null,
+      "created_at_utc": "2026-10-26T07:28:54.295163+00:00",
+      "updated_at_utc": "2026-10-26T07:28:54.295163+00:00",
+      "expires_at_epoch": null
+    },
+    "obsidian_vault_sync_mode": {
+      "key": "obsidian_vault_sync_mode",
+      "value": "BIDIRECTIONAL_AUTO",
+      "writer_agent_id": "agent-supervisor",
+      "version": 1,
+      "ttl_seconds": null,
+      "created_at_utc": "2026-10-26T07:28:54.295163+00:00",
+      "updated_at_utc": "2026-10-26T07:28:54.295163+00:00",
+      "expires_at_epoch": null
+    },
+    "latest_ledger_snapshot": {
+      "key": "latest_ledger_snapshot",
+      "value": "LEDGER_IN_SYNC",
+      "writer_agent_id": "agent-supervisor",
+      "version": 1,
+      "ttl_seconds": null,
+      "created_at_utc": "2026-10-26T07:28:54.295163+00:00",
+      "updated_at_utc": "2026-10-26T07:28:54.295163+00:00",
+      "expires_at_epoch": null
+    },
+    "test_http_key": {
+      "key": "test_http_key",
+      "value": {
+        "status": "all_subagents_nominal"
+      },
+      "writer_agent_id": "agent-supervisor",
+      "version": 5,
+      "ttl_seconds": null,
+      "created_at_utc": "2026-10-26T07:28:54.617932+00:00",
+      "updated_at_utc": "2026-10-26T07:45:53.019420+00:00",
+      "expires_at_epoch": null
+    },
+    "test_pipeline_flag": {
+      "key": "test_pipeline_flag",
+      "value": "STAGE_2_EXTRACTION",
+      "writer_agent_id": "agent-sow-worker",
+      "version": 10,
+      "ttl_seconds": null,
+      "created_at_utc": "2026-10-26T07:28:55.530288+00:00",
+      "updated_at_utc": "2026-10-26T07:45:53.641422+00:00",
+      "expires_at_epoch": null
+    }
+  },
+  "completed_tasks": [
+    {
+      "task_id": "http-task-1792999734624",
+      "agent_id": "agent-hermes-gateway",
+      "task_type": "model_inference",
+      "status": "completed",
+      "input_summary": {
+        "prompt": "Health probe ping"
+      },
+      "output_summary": {
+        "model": "qwen3:4b",
+        "status": "ok"
+      },
+      "artifacts": [],
+      "duration_ms": 42.5,
+      "timestamp_utc": "2026-10-26T07:28:54.625390+00:00",
+      "epoch": 2
+    },
+    {
+      "task_id": "task-inv-999",
+      "agent_id": "agent-invoice-ingestion",
+      "task_type": "csv_cleanse",
+      "status": "completed",
+      "input_summary": {},
+      "output_summary": {},
+      "artifacts": [],
+      "duration_ms": 0.0,
+      "timestamp_utc": "2026-10-26T07:28:55.527355+00:00",
+      "epoch": 3
+    },
+    {
+      "task_id": "test-probe-task-001",
+      "agent_id": "agent-diagnostic-probe",
+      "task_type": "telemetry_audit",
+      "status": "completed",
+      "input_summary": {
+        "target": "127.0.0.1:8080"
+      },
+      "output_summary": {
+        "latency_ms": 1.45,
+        "status": "optimal"
+      },
+      "artifacts": [
+        "scratch/test_probe.json"
+      ],
+      "duration_ms": 1.45,
+      "timestamp_utc": "2026-10-26T07:28:55.546626+00:00",
+      "epoch": 4
+    },
+    {
+      "task_id": "http-task-1792999751124",
+      "agent_id": "agent-hermes-gateway",
+      "task_type": "model_inference",
+      "status": "completed",
+      "input_summary": {
+        "prompt": "Health probe ping"
+      },
+      "output_summary": {
+        "model": "qwen3:4b",
+        "status": "ok"
+      },
+      "artifacts": [],
+      "duration_ms": 42.5,
+      "timestamp_utc": "2026-10-26T07:29:11.125994+00:00",
+      "epoch": 5
+    },
+    {
+      "task_id": "task-inv-999",
+      "agent_id": "agent-invoice-ingestion",
+      "task_type": "csv_cleanse",
+      "status": "completed",
+      "input_summary": {},
+      "output_summary": {},
+      "artifacts": [],
+      "duration_ms": 0.0,
+      "timestamp_utc": "2026-10-26T07:29:11.676410+00:00",
+      "epoch": 6
+    },
+    {
+      "task_id": "test-probe-task-001",
+      "agent_id": "agent-diagnostic-probe",
+      "task_type": "telemetry_audit",
+      "status": "completed",
+      "input_summary": {
+        "target": "127.0.0.1:8080"
+      },
+      "output_summary": {
+        "latency_ms": 1.45,
+        "status": "optimal"
+      },
+      "artifacts": [
+        "scratch/test_probe.json"
+      ],
+      "duration_ms": 1.45,
+      "timestamp_utc": "2026-10-26T07:29:11.771657+00:00",
+      "epoch": 7
+    },
+    {
+      "task_id": "task-local-5",
+      "agent_id": "agent-supervisor",
+      "task_type": "ping",
+      "status": "completed",
+      "input_summary": {
+        "command": "ping",
+        "remote": false
+      },
+      "output_summary": {
+        "result": "{'message': 'pong', 'service': 'hermes-aios-gateway', 'timestamp': '2026-10-26T07:29:20.393380+00:00'}"
+      },
+      "artifacts": [],
+      "duration_ms": 0.0,
+      "timestamp_utc": "2026-10-26T07:29:20.403179+00:00",
+      "epoch": 8
+    },
+    {
+      "task_id": "http-task-1792999769541",
+      "agent_id": "agent-hermes-gateway",
+      "task_type": "model_inference",
+      "status": "completed",
+      "input_summary": {
+        "prompt": "Health probe ping"
+      },
+      "output_summary": {
+        "model": "qwen3:4b",
+        "status": "ok"
+      },
+      "artifacts": [],
+      "duration_ms": 42.5,
+      "timestamp_utc": "2026-10-26T07:29:29.542195+00:00",
+      "epoch": 9
+    },
+    {
+      "task_id": "task-inv-999",
+      "agent_id": "agent-invoice-ingestion",
+      "task_type": "csv_cleanse",
+      "status": "completed",
+      "input_summary": {},
+      "output_summary": {},
+      "artifacts": [],
+      "duration_ms": 0.0,
+      "timestamp_utc": "2026-10-26T07:29:30.103702+00:00",
+      "epoch": 10
+    },
+    {
+      "task_id": "test-probe-task-001",
+      "agent_id": "agent-diagnostic-probe",
+      "task_type": "telemetry_audit",
+      "status": "completed",
+      "input_summary": {
+        "target": "127.0.0.1:8080"
+      },
+      "output_summary": {
+        "latency_ms": 1.45,
+        "status": "optimal"
+      },
+      "artifacts": [
+        "scratch/test_probe.json"
+      ],
+      "duration_ms": 1.45,
+      "timestamp_utc": "2026-10-26T07:29:30.197983+00:00",
+      "epoch": 11
+    },
+    {
+      "task_id": "task-local-3",
+      "agent_id": "agent-supervisor",
+      "task_type": "ping",
+      "status": "completed",
+      "input_summary": {
+        "command": "ping",
+        "remote": false
+      },
+      "output_summary": {
+        "result": "{'message': 'pong', 'service': 'hermes-aios-gateway', 'timestamp': '2026-10-26T07:32:39.201470+00:00'}"
+      },
+      "artifacts": [],
+      "duration_ms": 16.0,
+      "timestamp_utc": "2026-10-26T07:32:39.209884+00:00",
+      "epoch": 12
+    },
+    {
+      "task_id": "http-task-1793000729079",
+      "agent_id": "agent-hermes-gateway",
+      "task_type": "model_inference",
+      "status": "completed",
+      "input_summary": {
+        "prompt": "Health probe ping"
+      },
+      "output_summary": {
+        "model": "qwen3:4b",
+        "status": "ok"
+      },
+      "artifacts": [],
+      "duration_ms": 42.5,
+      "timestamp_utc": "2026-10-26T07:45:29.080209+00:00",
+      "epoch": 13
+    },
+    {
+      "task_id": "task-inv-999",
+      "agent_id": "agent-invoice-ingestion",
+      "task_type": "csv_cleanse",
+      "status": "completed",
+      "input_summary": {},
+      "output_summary": {},
+      "artifacts": [],
+      "duration_ms": 0.0,
+      "timestamp_utc": "2026-10-26T07:45:29.670269+00:00",
+      "epoch": 14
+    },
+    {
+      "task_id": "test-probe-task-001",
+      "agent_id": "agent-diagnostic-probe",
+      "task_type": "telemetry_audit",
+      "status": "completed",
+      "input_summary": {
+        "target": "127.0.0.1:8080"
+      },
+      "output_summary": {
+        "latency_ms": 1.45,
+        "status": "optimal"
+      },
+      "artifacts": [
+        "scratch/test_probe.json"
+      ],
+      "duration_ms": 1.45,
+      "timestamp_utc": "2026-10-26T07:45:29.792169+00:00",
+      "epoch": 15
+    },
+    {
+      "task_id": "task-local-5",
+      "agent_id": "agent-supervisor",
+      "task_type": "ping",
+      "status": "completed",
+      "input_summary": {
+        "command": "ping",
+        "remote": false
+      },
+      "output_summary": {
+        "result": "{'message': 'pong', 'service': 'hermes-aios-gateway', 'timestamp': '2026-10-26T07:45:41.331426+00:00'}"
+      },
+      "artifacts": [],
+      "duration_ms": 0.0,
+      "timestamp_utc": "2026-10-26T07:45:41.341309+00:00",
+      "epoch": 16
+    },
+    {
+      "task_id": "http-task-1793000753025",
+      "agent_id": "agent-hermes-gateway",
+      "task_type": "model_inference",
+      "status": "completed",
+      "input_summary": {
+        "prompt": "Health probe ping"
+      },
+      "output_summary": {
+        "model": "qwen3:4b",
+        "status": "ok"
+      },
+      "artifacts": [],
+      "duration_ms": 42.5,
+      "timestamp_utc": "2026-10-26T07:45:53.027911+00:00",
+      "epoch": 17
+    },
+    {
+      "task_id": "task-inv-999",
+      "agent_id": "agent-invoice-ingestion",
+      "task_type": "csv_cleanse",
+      "status": "completed",
+      "input_summary": {},
+      "output_summary": {},
+      "artifacts": [],
+      "duration_ms": 0.0,
+      "timestamp_utc": "2026-10-26T07:45:53.636533+00:00",
+      "epoch": 18
+    },
+    {
+      "task_id": "test-probe-task-001",
+      "agent_id": "agent-diagnostic-probe",
+      "task_type": "telemetry_audit",
+      "status": "completed",
+      "input_summary": {
+        "target": "127.0.0.1:8080"
+      },
+      "output_summary": {
+        "latency_ms": 1.45,
+        "status": "optimal"
+      },
+      "artifacts": [
+        "scratch/test_probe.json"
+      ],
+      "duration_ms": 1.45,
+      "timestamp_utc": "2026-10-26T07:45:53.733116+00:00",
+      "epoch": 19
+    }
+  ],
+  "last_vault_sync_utc": "2026-10-26T07:45:53.726237+00:00",
+  "vault_sync_status": "SYNCHRONIZED"
+}

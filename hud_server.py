@@ -5,13 +5,15 @@ import sqlite3
 import urllib.request
 import urllib.error
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from collections import deque
+from typing import Dict, Any, List, Optional
 import sys
 import socket
 import threading
 import time
 import uuid
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlparse
 
 PROBE_LOCK = threading.Lock()
 BUILD_ID = 'strict-probe-aligned-v1'
@@ -499,8 +501,11 @@ def get_gateway_status() -> dict:
     except Exception:
         hermes_agent_online = False
 
+    from hud.gateway import GLOBAL_SYNC_TRACKER, GLOBAL_FEEDBACK_LOOP
     crons = load_cron_registry()
     tasks = load_task_history()
+    seq_id = GLOBAL_SYNC_TRACKER.current_seq()
+    feedback = GLOBAL_FEEDBACK_LOOP.get_metrics()
     return {
         "status": "ok",
         "service": "aios-gateway-host",
@@ -517,14 +522,257 @@ def get_gateway_status() -> dict:
         "tasks_executed": len(tasks),
         "recent_tasks": tasks[-5:][::-1],
         "replay_cache_size": GLOBAL_NONCE_CACHE.size(),
+        "sync_sequence_id": seq_id,
+        "feedback": feedback,
         "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }
+
+# --------------------------------------------------------------------------- #
+# Next Cortex Anti-Gravity Dashboard Engine (Credits, Tasks, Hierarchy & Streaming)
+# --------------------------------------------------------------------------- #
+_CORTEX_LOCK = threading.RLock()
+_CORTEX_AUTO_ACCEPT = True
+_CORTEX_STREAMING_SERIES: deque = deque(maxlen=60)
+_CORTEX_START_TIME = time.time()
+_CORTEX_TOTAL_BUDGET = 100000
+
+def get_cortex_credits() -> Dict[str, Any]:
+    """Calculates local quota, remaining credits, model rates, and reset countdown."""
+    uptime_sec = time.time() - _CORTEX_START_TIME
+    db_data = get_offline_ledger_and_invariant()
+    total_jobs = len(db_data.get("jobs", []))
+
+    # Calculate token/credit burn based on executed jobs and gateway ops
+    from hud.gateway import GLOBAL_SYNC_TRACKER
+    seq = GLOBAL_SYNC_TRACKER.current_seq()
+
+    # 1 job = ~350 credit units, 1 gateway task = ~120 credit units
+    credits_consumed = min(_CORTEX_TOTAL_BUDGET, (total_jobs * 350) + (seq * 120))
+    credits_remaining = max(0, _CORTEX_TOTAL_BUDGET - credits_consumed)
+    usage_percent = round((credits_consumed / _CORTEX_TOTAL_BUDGET) * 100, 2)
+
+    # Reset countdown (24-hour rolling replenishment window)
+    now = datetime.now(timezone.utc)
+    seconds_until_midnight = 86400 - (now.hour * 3600 + now.minute * 60 + now.second)
+    burn_rate_min = round(float(credits_consumed) / max(1.0, uptime_sec / 60.0), 1)
+
+    return {
+        "total_budget": _CORTEX_TOTAL_BUDGET,
+        "credits_remaining": credits_remaining,
+        "credits_consumed": credits_consumed,
+        "usage_percent": usage_percent,
+        "reset_countdown_seconds": seconds_until_midnight,
+        "reset_time_utc": (now + timedelta(seconds=seconds_until_midnight)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "active_model": "qwen3:4b (Local Hermes / Unmetered)",
+        "burn_rate_credits_per_min": burn_rate_min,
+        "unmetered_local_calls": seq,
+        "metered_cloud_calls": 0,
+        "quota_status": "HEALTHY" if usage_percent < 80 else ("WARNING" if usage_percent < 95 else "CRITICAL")
+    }
+
+def get_cortex_automated_tasks() -> Dict[str, Any]:
+    """Tracks automated task execution history, auto-accept status, and pending approvals."""
+    from hud.gateway import load_task_history
+    tasks = load_task_history(limit=50)
+
+    auto_tasks = []
+    for t in tasks:
+        cmd = t.get("command", "")
+        is_safe = cmd in ("ping", "audit_invariants", "sync_board_tasks", "second_brain_scan", "reconciliation")
+        auto_tasks.append({
+            "task_id": t.get("task_id", ""),
+            "command": cmd,
+            "status": "auto_approved" if (_CORTEX_AUTO_ACCEPT and is_safe) else t.get("status", "completed"),
+            "duration_ms": t.get("duration_ms", 0.0),
+            "executed_at": t.get("executed_at", ""),
+            "requires_operator_signoff": not is_safe,
+            "sequence_id": t.get("sequence_id", 1)
+        })
+
+    return {
+        "auto_accept_enabled": _CORTEX_AUTO_ACCEPT,
+        "total_automated_tasks": len(auto_tasks),
+        "auto_approved_count": sum(1 for t in auto_tasks if t.get("status") == "auto_approved"),
+        "pending_review_count": sum(1 for t in auto_tasks if t.get("requires_operator_signoff")),
+        "tasks": auto_tasks
+    }
+
+def get_sqlite_ledger_data() -> Dict[str, Any]:
+    """Reads raw and aggregated data from SQLite job_ledger.db across tables in read-only mode."""
+    db_path = get_db_path()
+    if not os.path.exists(db_path):
+        return {"error": "SQLite ledger database not found", "tables": {}, "jobs": []}
+
+    tables_summary = {}
+    recent_jobs = []
+    terminal_events = []
+
+    try:
+        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+
+            # 1. Table inventory
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            table_names = [r["name"] for r in cur.fetchall()]
+            for tbl in table_names:
+                try:
+                    c = conn.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
+                    tables_summary[tbl] = {"row_count": c}
+                except Exception:
+                    tables_summary[tbl] = {"row_count": 0}
+
+            # 2. Detailed jobs
+            if "jobs" in table_names:
+                cur.execute("SELECT job_id, scope_id, job_type, state, attempt_count, created_at, updated_at FROM jobs ORDER BY updated_at DESC LIMIT 50")
+                for r in cur.fetchall():
+                    recent_jobs.append(dict(r))
+
+            # 3. Terminal events
+            if "hud_terminal_events" in table_names:
+                cur.execute("SELECT * FROM hud_terminal_events ORDER BY rowid DESC LIMIT 20")
+                for r in cur.fetchall():
+                    terminal_events.append(dict(r))
+    except Exception as exc:
+        return {"error": str(exc), "tables": {}, "jobs": []}
+
+    return {
+        "db_path": db_path,
+        "tables": tables_summary,
+        "jobs": recent_jobs,
+        "terminal_events": terminal_events,
+        "total_jobs": len(recent_jobs),
+        "timestamp_utc": datetime.now(timezone.utc).isoformat()
+    }
+
+def get_cortex_hierarchy() -> Dict[str, Any]:
+    """
+    Builds a multi-level DAG hierarchy graph from AIOS Governance -> Scopes -> SQLite Jobs -> Diodes.
+    Format is optimized for hierarchical tree/DAG rendering in SVG/Canvas.
+    """
+    ledger = get_sqlite_ledger_data()
+    jobs = ledger.get("jobs", [])
+
+    # Tier 1: Root Governance
+    nodes = [
+        {"id": "tier1-aios", "name": "AI OS Governance Core", "type": "root", "layer": 1, "status": "active"},
+        {"id": "tier1-ledger", "name": "Module 11 SQLite Ledger", "type": "root", "layer": 1, "status": "active"},
+        {"id": "tier1-hermes", "name": "Hermes Runtime (:8080)", "type": "root", "layer": 1, "status": "active"}
+    ]
+    links = [
+        {"source": "tier1-aios", "target": "tier1-ledger"},
+        {"source": "tier1-aios", "target": "tier1-hermes"}
+    ]
+
+    # Tier 2: Scopes
+    scopes = set()
+    for j in jobs:
+        sc = j.get("scope_id") or "default-scope"
+        scopes.add(sc)
+
+    for sc in sorted(scopes):
+        sc_id = f"scope-{sc}"
+        nodes.append({"id": sc_id, "name": f"Scope: {sc}", "type": "scope", "layer": 2, "scope": sc, "status": "active"})
+        links.append({"source": "tier1-ledger", "target": sc_id})
+
+    # Tier 3: Jobs
+    for j in jobs:
+        jid = j.get("job_id")
+        sc = j.get("scope_id") or "default-scope"
+        st = j.get("state", "queued")
+        node_id = f"job-{jid}"
+        nodes.append({
+            "id": node_id,
+            "name": f"{j.get('job_type', 'job')}: {jid}",
+            "job_id": jid,
+            "type": "job",
+            "layer": 3,
+            "scope": sc,
+            "state": st,
+            "attempts": j.get("attempt_count", 0),
+            "updated_at": j.get("updated_at", "")
+        })
+        links.append({"source": f"scope-{sc}", "target": node_id})
+
+    # Tier 4: Terminal Events
+    events = ledger.get("terminal_events", [])
+    for ev in events[:10]:
+        eid = ev.get("event_id") or f"ev-{ev.get('job_id', 'unknown')}"
+        node_id = f"event-{eid}"
+        nodes.append({
+            "id": node_id,
+            "name": f"Diode Event {eid}",
+            "type": "diode",
+            "layer": 4,
+            "status": "sealed"
+        })
+        parent_job = f"job-{ev.get('job_id', '')}"
+        if any(n["id"] == parent_job for n in nodes):
+            links.append({"source": parent_job, "target": node_id})
+
+    return {
+        "nodes": nodes,
+        "links": links,
+        "layers": [
+            {"layer": 1, "name": "Governance Core"},
+            {"layer": 2, "name": "Execution Scopes"},
+            {"layer": 3, "name": "SQLite Jobs"},
+            {"layer": 4, "name": "Terminal Diodes"}
+        ],
+        "summary": {
+            "total_nodes": len(nodes),
+            "total_links": len(links),
+            "jobs_count": len(jobs),
+            "scopes_count": len(scopes)
+        }
+    }
+
+def record_cortex_streaming_point() -> Dict[str, Any]:
+    """Appends a new time-series metric sample into the rolling streaming series."""
+    with _CORTEX_LOCK:
+        credits_info = get_cortex_credits()
+        from hud.gateway import GLOBAL_FEEDBACK_LOOP
+        fb = GLOBAL_FEEDBACK_LOOP.get_metrics()
+
+        db_data = get_offline_ledger_and_invariant()
+        jobs_active = sum(1 for j in db_data.get("jobs", []) if j.get("state") in ("queued", "running"))
+        jobs_completed = sum(1 for j in db_data.get("jobs", []) if j.get("state") == "completed")
+
+        pt = {
+            "ts": time.strftime("%H:%M:%S", time.gmtime()),
+            "time_epoch": round(time.time(), 2),
+            "credits_remaining": credits_info.get("credits_remaining", 100000),
+            "credits_consumed": credits_info.get("credits_consumed", 0),
+            "burn_rate": credits_info.get("burn_rate_credits_per_min", 0.0),
+            "rtt_ms": fb.get("latest_rtt_ms", 0.0),
+            "jobs_active": jobs_active,
+            "jobs_completed": jobs_completed,
+            "throughput_ops_sec": round(fb.get("total_probes", 0) / max(1.0, (time.time() - _CORTEX_START_TIME)), 2)
+        }
+        _CORTEX_STREAMING_SERIES.append(pt)
+        return pt
+
+def get_cortex_streaming_series() -> List[Dict[str, Any]]:
+    """Returns the rolling 60-second time-series buffer for streaming charts."""
+    with _CORTEX_LOCK:
+        if not _CORTEX_STREAMING_SERIES:
+            record_cortex_streaming_point()
+        return list(_CORTEX_STREAMING_SERIES)
 
 # --------------------------------------------------------------------------- #
 # AI OS dashboard: telemetry frame + board helpers (logic lives in hud/os_dashboard.py)
 # --------------------------------------------------------------------------- #
 _HERMES_CACHE = {"at": 0.0, "value": None}
 _HERMES_CACHE_LOCK = threading.Lock()
+_TELEMETRY_TRIGGER = threading.Event()
+
+
+def notify_telemetry_event():
+    """Wakes up all active SSE streams immediately to flush new frame deltas with 0 buffering lag."""
+    with _HERMES_CACHE_LOCK:
+        _HERMES_CACHE["value"] = None
+        _HERMES_CACHE["at"] = 0.0
+    _TELEMETRY_TRIGGER.set()
 
 
 def cached_hermes_telemetry(ttl: float = 15.0) -> dict:
@@ -587,7 +835,7 @@ def os_frame() -> dict:
         "guard": _mtime(str(GUARDRAIL_LOG)),
         "e2e": _mtime(str(E2E_LOG_PATH)),
     }
-    return osd.compose_frame(
+    frame = osd.compose_frame(
         hermes=cached_hermes_telemetry(), ledger=get_offline_ledger_and_invariant(),
         gtm=get_gtm_queue(), alerts_status=get_alerts_status(),
         inbox=_read_json_file(INBOX_SNAPSHOT, {}), guard_events=_read_json_file(str(GUARDRAIL_LOG), []),
@@ -596,6 +844,18 @@ def os_frame() -> dict:
         server={"pid": os.getpid(), "build": BUILD_ID, "uptime_min": int((time.time() - SERVER_STARTED) // 60)},
         gateway=get_gateway_status(),
     )
+    st_pt = record_cortex_streaming_point()
+    frame["cortex"] = {
+        "credits": get_cortex_credits(),
+        "tasks": get_cortex_automated_tasks(),
+        "latest_stream_point": st_pt
+    }
+    try:
+        from hud.shared_memory import get_shared_memory_store
+        frame["memory"] = get_shared_memory_store().get_state_summary()
+    except Exception as exc:
+        frame["memory"] = {"error": str(exc)}
+    return frame
 
 
 def os_inbox_payload() -> dict:
@@ -847,15 +1107,23 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         return
 
-    def _send_json(self, data: dict, status: int = 200):
+    def _send_json(self, data: dict, status: int = 200, ack_id: str | None = None, seq_id: int | None = None, rtt_ms: float | None = None):
         raw = json.dumps(data).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "no-cache, no-transform, no-store")
+        self.send_header("X-Accel-Buffering", "no")
         self.send_header("Content-Security-Policy", "default-src 'self' 'unsafe-inline'")
+        if ack_id:
+            self.send_header("X-Gateway-Ack", str(ack_id))
+        if seq_id is not None:
+            self.send_header("X-Gateway-Seq", str(seq_id))
+        if rtt_ms is not None:
+            self.send_header("X-Gateway-RTT", str(rtt_ms))
         self.end_headers()
         self.wfile.write(raw)
+        self.wfile.flush()
 
     def _send_static(self, rel_path: str, csp: str | None = None):
         """Serve a file under hud-interface/static only (no traversal)."""
@@ -899,10 +1167,12 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
 
     def _stream_os_telemetry(self):
         """Server-Sent Events: one compact frame when anything changes, a ping every 15 s.
-        Each connection lives 10 minutes, then the browser's EventSource reconnects."""
+        Each connection lives 10 minutes, then the browser's EventSource reconnects.
+        Enforces zero-buffering headers and event-triggered fast-path wakeups."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
+        self.send_header("Cache-Control", "no-cache, no-transform, no-store")
+        self.send_header("X-Accel-Buffering", "no")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         last_hash, last_sent, seq = None, 0.0, 0
@@ -926,7 +1196,9 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                     self.wfile.write(f"event: ping\ndata: {ping}\n\n".encode("utf-8"))
                     last_sent = time.monotonic()
                 self.wfile.flush()
-                time.sleep(2)
+                # Fast-path event wait: wakes immediately upon state change or every 2 seconds
+                _TELEMETRY_TRIGGER.wait(timeout=2.0)
+                _TELEMETRY_TRIGGER.clear()
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
             return
 
@@ -966,18 +1238,22 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
         try:
             if path == "/api/os/board":
                 osd.apply_board_op(body)
+                notify_telemetry_event()
                 self._send_json(os_board_payload())
             elif path == "/api/os/editor/save":
                 self._send_json(osd.editor_save(str(body.get("name", "")), body.get("text"), body.get("base_sha256") or None))
             elif path == "/api/os/obsidian/note":
                 self._send_json(osd.create_vault_note(body))
+                notify_telemetry_event()
             elif path == "/api/os/obsidian/rescan":
                 osd.invalidate_vault_cache()
+                notify_telemetry_event()
                 self._send_json(os_frame().get("obsidian", {}))
             elif path == "/api/os/outbox/decide":
                 from hud.gtm import decide
                 decide(os.path.join(GTM_DIR, "staged_outreach.json"), str(body.get("id", "")),
                        str(body.get("revision", "")), str(body.get("decision", "")))
+                notify_telemetry_event()
                 self._send_json(os_outbox_payload())
             else:
                 self._send_json({"error": "Unknown endpoint"}, 404)
@@ -1058,12 +1334,57 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"token": "local-session-token", "authenticated": True})
         elif self.path == "/api/gateway/status":
             self._send_json(get_gateway_status())
+        elif self.path in ("/api/gateway/feedback", "/api/gateway/sync"):
+            from hud.gateway import GLOBAL_SYNC_TRACKER, GLOBAL_FEEDBACK_LOOP
+            self._send_json({
+                "status": "ok",
+                "sequence_id": GLOBAL_SYNC_TRACKER.current_seq(),
+                "feedback": GLOBAL_FEEDBACK_LOOP.get_metrics(),
+                "history": GLOBAL_SYNC_TRACKER.get_history(limit=25),
+                "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            })
         elif self.path == "/api/gateway/crons":
             from hud.gateway import load_cron_registry
             self._send_json({"status": "ok", "crons": load_cron_registry()})
         elif self.path == "/api/gateway/tasks":
             from hud.gateway import load_task_history
             self._send_json({"status": "ok", "tasks": load_task_history()})
+        elif self.path == "/api/cortex/credits":
+            self._send_json(get_cortex_credits())
+        elif self.path == "/api/cortex/tasks":
+            self._send_json(get_cortex_automated_tasks())
+        elif self.path == "/api/cortex/hierarchy":
+            self._send_json(get_cortex_hierarchy())
+        elif self.path == "/api/cortex/streaming-series":
+            self._send_json({"status": "ok", "series": get_cortex_streaming_series()})
+        elif self.path == "/api/sqlite/ledger":
+            self._send_json(get_sqlite_ledger_data())
+        elif self.path == "/api/memory/state":
+            from hud.shared_memory import get_shared_memory_store
+            self._send_json(get_shared_memory_store().get_state_summary())
+        elif self.path.startswith("/api/memory/tasks"):
+            from hud.shared_memory import get_shared_memory_store
+            self._send_json({"status": "ok", "tasks": get_shared_memory_store().get_completed_tasks()})
+        elif self.path.startswith("/api/memory/blackboard"):
+            from hud.shared_memory import get_shared_memory_store
+            store = get_shared_memory_store()
+            q_parsed = parse_qs(urlparse(self.path).query)
+            key = (q_parsed.get("key") or [""])[0]
+            if key:
+                self._send_json({"key": key, "value": store.get_blackboard_key(key)})
+            else:
+                self._send_json({"status": "ok", "entries": store.get_all_blackboard_entries()})
+        elif self.path == "/api/memory/obsidian-status":
+            from hud.shared_memory import get_shared_memory_store, PRIMARY_VAULT_DIR, LOCAL_VAULT_DIR
+            store = get_shared_memory_store()
+            self._send_json({
+                "status": store._vault_sync_status,
+                "last_vault_sync_utc": store._last_vault_sync_utc,
+                "primary_vault_dir": str(PRIMARY_VAULT_DIR),
+                "primary_vault_exists": PRIMARY_VAULT_DIR.exists(),
+                "local_vault_dir": str(LOCAL_VAULT_DIR),
+                "local_vault_exists": LOCAL_VAULT_DIR.exists()
+            })
         elif self.path == "/api/hud":
             self._send_json({
                 "hermes": get_hermes_telemetry(),
@@ -1260,6 +1581,60 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                 invoice_fixture=str(body.get("invoice_fixture", "adversarial_fixture.csv")),
                 stage_to_outbox=bool(body.get("stage_to_outbox", True)),
             ))
+        elif self.path == "/api/cortex/auto-accept":
+            global _CORTEX_AUTO_ACCEPT
+            if isinstance(body, dict) and "enabled" in body:
+                _CORTEX_AUTO_ACCEPT = bool(body["enabled"])
+            else:
+                _CORTEX_AUTO_ACCEPT = not _CORTEX_AUTO_ACCEPT
+            notify_telemetry_event()
+            self._send_json({"status": "ok", "auto_accept_enabled": _CORTEX_AUTO_ACCEPT})
+        elif self.path == "/api/memory/task/complete":
+            from hud.shared_memory import get_shared_memory_store
+            store = get_shared_memory_store()
+            rec = store.record_task_completion(
+                agent_id=str(body.get("agent_id", "sub-agent")),
+                task_id=str(body.get("task_id", f"task-sstm-{int(time.time()*1000)}")),
+                task_type=str(body.get("task_type", "general")),
+                status=str(body.get("status", "completed")),
+                input_summary=body.get("input_summary", {}),
+                output_summary=body.get("output_summary", {}),
+                artifacts=body.get("artifacts", []),
+                duration_ms=float(body.get("duration_ms", 0.0)),
+                sync_vault_now=bool(body.get("sync_vault_now", True))
+            )
+            notify_telemetry_event()
+            self._send_json({"status": "recorded", "task": rec.to_dict()})
+        elif self.path == "/api/memory/agent/heartbeat":
+            from hud.shared_memory import get_shared_memory_store
+            store = get_shared_memory_store()
+            ag = store.update_agent_heartbeat(
+                agent_id=str(body.get("agent_id", "sub-agent")),
+                role=body.get("role"),
+                operational_state=str(body.get("operational_state", "idle")),
+                current_task_id=body.get("current_task_id"),
+                capabilities=body.get("capabilities"),
+                meta=body.get("meta")
+            )
+            notify_telemetry_event()
+            self._send_json({"status": "updated", "agent": ag.to_dict()})
+        elif self.path == "/api/memory/blackboard":
+            from hud.shared_memory import get_shared_memory_store
+            store = get_shared_memory_store()
+            entry = store.set_blackboard_key(
+                key=str(body.get("key", "")),
+                value=body.get("value"),
+                writer_agent_id=str(body.get("writer_agent_id", "operator")),
+                ttl_seconds=float(body["ttl_seconds"]) if body.get("ttl_seconds") is not None else None
+            )
+            notify_telemetry_event()
+            self._send_json({"status": "set", "entry": entry.to_dict()})
+        elif self.path == "/api/memory/sync-obsidian":
+            from hud.shared_memory import get_shared_memory_store
+            store = get_shared_memory_store()
+            res = store.sync_to_obsidian_vault()
+            notify_telemetry_event()
+            self._send_json(res)
         elif self.path.startswith("/api/gateway/"):
             from hud.gateway import (
                 verify_gateway_request, GatewayAuthError,
@@ -1267,6 +1642,10 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                 load_cron_registry, update_cron_job, trigger_cron_job, delete_cron_job,
                 send_signed_rpc
             )
+            start_t = time.monotonic()
+            idemp_key = self.headers.get("X-Idempotency-Key") or body.get("idempotency_key")
+            if idemp_key and "idempotency_key" not in body:
+                body["idempotency_key"] = idemp_key
 
             # Inbound Hermes Webhook / RPC Callback requires strict signature verification
             if self.path == "/api/gateway/hermes":
@@ -1282,29 +1661,77 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                 method = body.get("method", "")
                 params = body.get("params", {})
                 req_id = body.get("id")
+                if idemp_key and "idempotency_key" not in params:
+                    params["idempotency_key"] = idemp_key
                 rpc_res = execute_gateway_rpc(method, params)
+                notify_telemetry_event()
+                rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
+                ack = rpc_res.get("ack")
                 out = {
                     "jsonrpc": "2.0",
                     "id": req_id,
                     "result": rpc_res.get("result"),
                     "error": rpc_res.get("error"),
-                    "status": "error" if rpc_res.get("error") else "ok"
+                    "status": "error" if rpc_res.get("error") else "ok",
+                    "ack": ack,
+                    "round_trip_ms": rtt_ms
                 }
                 status_code = 400 if rpc_res.get("error") else 200
-                self._send_json(out, status_code)
+                ack_id = ack.get("ack_id") if ack else None
+                seq_id = ack.get("sequence_id") if ack else None
+                self._send_json(out, status_code, ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
                 return
 
             elif self.path == "/api/gateway/tasks":
                 cmd = body.get("command") or body.get("cmd", "ping")
                 params = body.get("params", body)
+                if idemp_key and "idempotency_key" not in params:
+                    params["idempotency_key"] = idemp_key
                 dispatch_remote = bool(body.get("remote", False))
 
                 if dispatch_remote:
-                    res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.task.execute", {"command": cmd, **params})
-                    self._send_json(res)
+                    res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.task.execute", {"command": cmd, **params}, idempotency_key=idemp_key)
+                    notify_telemetry_event()
+                    ack = res.get("ack")
+                    ack_id = ack.get("ack_id") if isinstance(ack, dict) else None
+                    seq_id = ack.get("sequence_id") if isinstance(ack, dict) else None
+                    rtt_ms = res.get("round_trip_ms")
+                    try:
+                        from hud.shared_memory import get_shared_memory_store
+                        get_shared_memory_store().record_task_completion(
+                            agent_id="agent-hermes-gateway",
+                            task_id=f"task-hermes-{seq_id or int(time.time()*1000)}",
+                            task_type=cmd,
+                            status="completed" if not res.get("error") else "failed",
+                            input_summary={"command": cmd, "remote": True},
+                            output_summary={"result": str(res.get("result", res))[:200]},
+                            duration_ms=float(rtt_ms or 0.0)
+                        )
+                    except Exception:
+                        pass
+                    self._send_json(res, ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
                 else:
                     task_res = execute_task_command(cmd, params)
-                    self._send_json({"status": "ok", "task": task_res})
+                    notify_telemetry_event()
+                    rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
+                    ack = task_res.get("ack")
+                    ack_id = ack.get("ack_id") if isinstance(ack, dict) else None
+                    seq_id = ack.get("sequence_id") if isinstance(ack, dict) else None
+                    try:
+                        from hud.shared_memory import get_shared_memory_store
+                        get_shared_memory_store().record_task_completion(
+                            agent_id="agent-supervisor",
+                            task_id=f"task-local-{seq_id or int(time.time()*1000)}",
+                            task_type=cmd,
+                            status="completed" if not task_res.get("error") else "failed",
+                            input_summary={"command": cmd, "remote": False},
+                            output_summary={"result": str(task_res.get("result", task_res))[:200]},
+                            duration_ms=float(rtt_ms or 0.0)
+                        )
+                    except Exception:
+                        pass
+                    self._send_json({"status": "ok", "task": task_res, "ack": ack, "round_trip_ms": rtt_ms},
+                                    ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
                 return
 
             elif self.path == "/api/gateway/crons":
@@ -1314,29 +1741,55 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                     if action == "trigger":
                         dispatch_remote = bool(body.get("remote", False))
                         if dispatch_remote:
-                            res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.cron.trigger", {"id": cron_id})
+                            res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.cron.trigger", {"id": cron_id}, idempotency_key=idemp_key)
+                            notify_telemetry_event()
                             self._send_json(res)
                         else:
                             outcome = trigger_cron_job(cron_id)
-                            self._send_json({"status": "ok", "triggered": outcome})
+                            notify_telemetry_event()
+                            rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
+                            seq_id = outcome.get("sequence_id")
+                            self._send_json({"status": "ok", "triggered": outcome, "round_trip_ms": rtt_ms}, seq_id=seq_id, rtt_ms=rtt_ms)
                     elif action == "delete":
                         del_ok = delete_cron_job(cron_id)
-                        self._send_json({"status": "ok" if del_ok else "not_found", "deleted": del_ok})
+                        notify_telemetry_event()
+                        rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
+                        self._send_json({"status": "ok" if del_ok else "not_found", "deleted": del_ok, "round_trip_ms": rtt_ms}, rtt_ms=rtt_ms)
                     else:
                         upd = update_cron_job(cron_id, body)
-                        self._send_json({"status": "ok", "cron": upd})
+                        notify_telemetry_event()
+                        rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
+                        seq_id = upd.get("sequence_id")
+                        self._send_json({"status": "ok", "cron": upd, "round_trip_ms": rtt_ms}, seq_id=seq_id, rtt_ms=rtt_ms)
                 except Exception as err:
                     self._send_json({"error": str(err), "status": "error"}, 400)
                 return
 
             elif self.path == "/api/gateway/board/sync":
                 dispatch_remote = bool(body.get("remote", False))
+                if idemp_key and "idempotency_key" not in body:
+                    body["idempotency_key"] = idemp_key
                 if dispatch_remote:
-                    res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.board.sync", body)
-                    self._send_json(res)
+                    res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.board.sync", body, idempotency_key=idemp_key)
+                    notify_telemetry_event()
+                    ack = res.get("ack")
+                    ack_id = ack.get("ack_id") if isinstance(ack, dict) else None
+                    seq_id = ack.get("sequence_id") if isinstance(ack, dict) else None
+                    rtt_ms = res.get("round_trip_ms")
+                    self._send_json(res, ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
                 else:
                     rpc_res = execute_gateway_rpc("hermes.board.sync", body)
-                    self._send_json(rpc_res.get("result", rpc_res))
+                    notify_telemetry_event()
+                    rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
+                    ack = rpc_res.get("ack")
+                    ack_id = ack.get("ack_id") if isinstance(ack, dict) else None
+                    seq_id = ack.get("sequence_id") if isinstance(ack, dict) else None
+                    out = rpc_res.get("result", rpc_res)
+                    if isinstance(out, dict):
+                        out["round_trip_ms"] = rtt_ms
+                        if ack:
+                            out["ack"] = ack
+                    self._send_json(out, ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
                 return
 
             self._send_json({"error": "Unknown gateway endpoint"}, 404)

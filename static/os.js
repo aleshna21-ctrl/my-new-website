@@ -41,6 +41,22 @@
       moved: false,
       screenPositions: {},
       tick: 0
+    },
+    cortex: {
+      credits: null,
+      tasks: null,
+      hierarchy: null,
+      streamingSeries: [],
+      sqliteJobs: [],
+      selectedNodeId: "governance_core",
+      selectedTier: "tier1"
+    },
+    memory: {
+      epoch: 1,
+      agents: [],
+      blackboard: {},
+      tasks: [],
+      vaultSyncStatus: null
     }
   };
 
@@ -165,6 +181,16 @@
   function api(url, opts) {
     var options = opts || {};
     var headers = options.headers || {};
+    var method = (options.method || "GET").toUpperCase();
+    var isMutation = method === "POST" || method === "PUT" || method === "DELETE";
+    if (isMutation && !headers["X-Idempotency-Key"]) {
+      var idemp = "idemp-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+      headers["X-Idempotency-Key"] = idemp;
+      if (options.body && typeof options.body === "object" && !options.body.idempotency_key) {
+        options.body.idempotency_key = idemp;
+      }
+    }
+    headers["Cache-Control"] = "no-cache, no-transform, no-store";
     if (options.body && typeof options.body === "object") {
       headers["Content-Type"] = "application/json";
       options.body = JSON.stringify(options.body);
@@ -211,10 +237,14 @@
     var trk = $("drawer-tracker");
     var quar = $("drawer-quarantine");
     var gw = $("drawer-gateway");
+    var ctx = $("drawer-cortex");
+    var mem = $("drawer-memory");
     if (cal) cal.setAttribute("hidden", "");
     if (trk) trk.setAttribute("hidden", "");
     if (quar) quar.setAttribute("hidden", "");
     if (gw) gw.setAttribute("hidden", "");
+    if (ctx) ctx.setAttribute("hidden", "");
+    if (mem) mem.setAttribute("hidden", "");
     if (scrim) scrim.removeAttribute("hidden");
     if (drawerName === "calendar" && cal) {
       cal.removeAttribute("hidden");
@@ -226,6 +256,12 @@
     } else if (drawerName === "gateway" && gw) {
       gw.removeAttribute("hidden");
       loadGatewayDrawer();
+    } else if (drawerName === "cortex" && ctx) {
+      ctx.removeAttribute("hidden");
+      loadCortexDrawer();
+    } else if (drawerName === "memory" && mem) {
+      mem.removeAttribute("hidden");
+      loadMemoryDrawer();
     }
   }
 
@@ -235,11 +271,15 @@
     var trk = $("drawer-tracker");
     var quar = $("drawer-quarantine");
     var gw = $("drawer-gateway");
+    var ctx = $("drawer-cortex");
+    var mem = $("drawer-memory");
     if (scrim) scrim.setAttribute("hidden", "");
     if (cal) cal.setAttribute("hidden", "");
     if (trk) trk.setAttribute("hidden", "");
     if (quar) quar.setAttribute("hidden", "");
     if (gw) gw.setAttribute("hidden", "");
+    if (ctx) ctx.setAttribute("hidden", "");
+    if (mem) mem.setAttribute("hidden", "");
   }
 
   function wireNavigation() {
@@ -898,6 +938,12 @@
     renderNodeInspector(STATE.selectedNode);
     renderObsidianInspector();
     renderStreamStats();
+    if (frame.cortex) {
+      applyCortexTelemetry(frame.cortex);
+    }
+    if (frame.memory) {
+      applyMemoryTelemetry(frame.memory);
+    }
   }
 
   function triggerSidebarPulse(nodeId, deltaText, bannerText) {
@@ -1916,6 +1962,8 @@
     clear(dl);
     var pairs = [
       ["Transport", STATE.streamConnected ? "Server-Sent Events (/api/os/stream)" : "HTTP Poll (/api/os/telemetry)"],
+      ["Anti-Buffering", "Enforced (0ms fast-path trigger)"],
+      ["Sync Sequence", STATE.frame.sync_sequence_id ? ("#" + STATE.frame.sync_sequence_id) : "—"],
       ["Frames received", String(STATE.framesReceived)],
       ["Frame hash", STATE.frame.hash || "—"],
       ["Frame timestamp", STATE.frame.ts || "—"],
@@ -2935,7 +2983,50 @@
     else if (tab === "crons") loadGatewayCrons();
   }
 
+  function loadGatewayFeedback() {
+    api("/api/gateway/feedback").then(function (res) {
+      if (!res) return;
+      var fb = res.feedback || {};
+      var seq = res.sequence_id || 1;
+
+      var badgeSeq = $("gw-badge-seq");
+      if (badgeSeq) badgeSeq.textContent = "SEQ #" + seq;
+
+      var badgeLat = $("gw-badge-latency");
+      if (badgeLat) {
+        var rtt = fb.latest_rtt_ms != null ? fb.latest_rtt_ms + "ms" : "0ms";
+        var health = fb.sync_health || "OPTIMAL";
+        badgeLat.textContent = "● " + rtt + " [" + health + "]";
+        badgeLat.className = "tag " + (health === "OPTIMAL_REALTIME" || health === "OPTIMAL" ? "ok" : (health === "ACCEPTABLE" ? "info" : "warn"));
+      }
+
+      var trigMeta = $("trig-gw-meta");
+      if (trigMeta) {
+        var rttVal = fb.latest_rtt_ms != null ? fb.latest_rtt_ms + "ms" : "0ms";
+        trigMeta.textContent = "ONLINE · #" + seq + " · " + rttVal;
+      }
+
+      var chipSync = $("gw-chip-sync");
+      if (chipSync) {
+        chipSync.textContent = "SYNC: " + (fb.sync_health || "REALTIME");
+        chipSync.className = "chip-badge " + (fb.sync_health === "DEGRADED" ? "err" : (fb.sync_health === "BUFFERED_WARN" ? "warn" : "ok"));
+      }
+
+      var summ = $("gw-feedback-summary");
+      if (summ) {
+        var p50 = fb.p50_rtt_ms != null ? fb.p50_rtt_ms + "ms" : "—";
+        var p95 = fb.p95_rtt_ms != null ? fb.p95_rtt_ms + "ms" : "—";
+        var minR = fb.min_rtt_ms != null ? fb.min_rtt_ms + "ms" : "—";
+        var maxR = fb.max_rtt_ms != null ? fb.max_rtt_ms + "ms" : "—";
+        var samples = fb.samples_recorded || 0;
+        summ.textContent = "HMAC-SHA256 Gateway Active. Monotonic Sequence: #" + seq + " · RTT: " + (fb.latest_rtt_ms != null ? fb.latest_rtt_ms + "ms" : "0ms") +
+          " (p50: " + p50 + ", p95: " + p95 + ", min: " + minR + ", max: " + maxR + " over " + samples + " ops) · Health: " + (fb.sync_health || "OPTIMAL_REALTIME") + " · Zero-buffering fast path.";
+      }
+    }).catch(function () {});
+  }
+
   function loadGatewayDrawer() {
+    loadGatewayFeedback();
     switchGatewayTab(CURRENT_GW_TAB);
   }
 
@@ -3164,8 +3255,10 @@
           method: "POST",
           body: { action: "trigger", job_id: c.id }
         }).then(function (res) {
-          toast("Cron triggered: " + c.name);
+          var ackTxt = res.ack ? (" [ACK: " + res.ack.ack_id + " SEQ #" + res.ack.sequence_id + "]") : "";
+          toast("Cron triggered: " + c.name + ackTxt);
           loadGatewayCrons();
+          loadGatewayFeedback();
         }).catch(function (err) {
           toast("Cron trigger error: " + err.message);
           trigBtn.textContent = "▶ Run Now";
@@ -3210,6 +3303,19 @@
       });
     }
 
+    // Refresh Gateway Status Button
+    var btnRefresh = $("gw-btn-refresh");
+    if (btnRefresh) {
+      btnRefresh.addEventListener("click", function () {
+        btnRefresh.textContent = "↻ Probing...";
+        loadGatewayFeedback();
+        if (CURRENT_GW_TAB === "tasks") loadGatewayTasks();
+        else if (CURRENT_GW_TAB === "board") loadGatewayBoard();
+        else if (CURRENT_GW_TAB === "crons") loadGatewayCrons();
+        setTimeout(function () { btnRefresh.textContent = "↻ Refresh"; }, 800);
+      });
+    }
+
     // Tab buttons
     var tabBtns = document.querySelectorAll(".gw-tab-btn");
     tabBtns.forEach(function (btn) {
@@ -3242,8 +3348,10 @@
         }).then(function (res) {
           if (btn) btn.textContent = "▶ Dispatch Task Command";
           if (stat) stat.textContent = res.status === "completed" ? "Execution Succeeded" : "Completed";
-          toast("Task " + (res.task_id || "") + " executed: " + res.status);
+          var ackTxt = res.ack ? (" [ACK: " + res.ack.ack_id + " SEQ #" + res.ack.sequence_id + "]") : "";
+          toast("Task " + (res.task_id || "") + " executed: " + res.status + ackTxt);
           loadGatewayTasks();
+          loadGatewayFeedback();
         }).catch(function (err) {
           if (btn) btn.textContent = "▶ Dispatch Task Command";
           if (stat) stat.textContent = "Execution Failed";
@@ -3262,8 +3370,10 @@
           body: { sync_all: true }
         }).then(function (res) {
           btnSyncBoard.textContent = "⚡ Sync Board with Hermes";
-          toast("Kanban board synchronized with Hermes!");
+          var ackTxt = res.ack ? (" [ACK: " + res.ack.ack_id + " SEQ #" + res.ack.sequence_id + "]") : "";
+          toast("Kanban board synchronized with Hermes!" + ackTxt);
           loadGatewayBoard();
+          loadGatewayFeedback();
         }).catch(function (err) {
           btnSyncBoard.textContent = "⚡ Sync Board with Hermes";
           toast("Sync error: " + err.message);
@@ -3280,8 +3390,10 @@
           body: { sync_vital_only: true }
         }).then(function (res) {
           btnPushVital.textContent = "⚡ Push Vital Tasks to Hermes";
-          toast("Vital tasks pushed to Hermes!");
+          var ackTxt = res.ack ? (" [ACK: " + res.ack.ack_id + " SEQ #" + res.ack.sequence_id + "]") : "";
+          toast("Vital tasks pushed to Hermes!" + ackTxt);
           loadGatewayBoard();
+          loadGatewayFeedback();
         }).catch(function (err) {
           btnPushVital.textContent = "⚡ Push Vital Tasks to Hermes";
           toast("Push error: " + err.message);
@@ -3332,13 +3444,866 @@
             description: cDesc
           }
         }).then(function (res) {
-          toast("Cron schedule saved!");
+          var ackTxt = res.ack ? (" [ACK: " + res.ack.ack_id + " SEQ #" + res.ack.sequence_id + "]") : "";
+          toast("Cron schedule saved!" + ackTxt);
           if (cronCard) cronCard.setAttribute("hidden", "");
           loadGatewayCrons();
+          loadGatewayFeedback();
         }).catch(function (err) {
           toast("Save error: " + err.message);
         });
       });
+    }
+  }
+
+  // ==================== NEXT CORTEX DASHBOARD (REAL-TIME VISUALIZATION) ====================
+  function wireCortexDrawer() {
+    var toggleBtn = $("cortex-btn-toggle-auto");
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", function () {
+        var curMode = !!(STATE.cortex && STATE.cortex.tasks && STATE.cortex.tasks.auto_accept_mode);
+        var nextMode = !curMode;
+        api("/api/cortex/auto-accept", {
+          method: "POST",
+          body: { enabled: nextMode }
+        }).then(function (res) {
+          toast(res.message || "Auto-accept mode updated");
+          if (STATE.cortex && STATE.cortex.tasks) {
+            STATE.cortex.tasks.auto_accept_mode = res.auto_accept_mode;
+          }
+          renderCortexMetrics();
+        }).catch(function (err) {
+          toast("Toggle error: " + err.message);
+        });
+      });
+    }
+
+    var refBtn = $("cortex-btn-refresh");
+    if (refBtn) {
+      refBtn.addEventListener("click", function () {
+        loadCortexDrawer();
+      });
+    }
+  }
+
+  function loadCortexDrawer() {
+    Promise.all([
+      api("/api/cortex/credits").catch(function () { return null; }),
+      api("/api/cortex/tasks").catch(function () { return null; }),
+      api("/api/cortex/hierarchy").catch(function () { return null; }),
+      api("/api/cortex/streaming-series").catch(function () { return null; }),
+      api("/api/sqlite/ledger?table=jobs&limit=50").catch(function () { return null; })
+    ]).then(function (results) {
+      var credits = results[0];
+      var tasks = results[1];
+      var hierarchy = results[2];
+      var series = results[3];
+      var ledger = results[4];
+
+      if (credits) STATE.cortex.credits = credits;
+      if (tasks) STATE.cortex.tasks = tasks;
+      if (hierarchy) STATE.cortex.hierarchy = hierarchy;
+      if (series && Array.isArray(series.series)) {
+        STATE.cortex.streamingSeries = series.series;
+      }
+      if (ledger) {
+        STATE.cortex.sqliteJobs = ledger.jobs || ledger.rows || [];
+      }
+
+      renderCortexMetrics();
+      renderCortexStreamingChart(STATE.cortex.streamingSeries);
+      renderCortexHierarchy(STATE.cortex.hierarchy);
+      renderCortexSqliteTable(STATE.cortex.sqliteJobs);
+      renderCortexTasks(STATE.cortex.tasks);
+    }).catch(function (err) {
+      toast("Error loading Cortex dashboard: " + err.message);
+    });
+  }
+
+  function applyCortexTelemetry(cortexData) {
+    if (!cortexData) return;
+    if (cortexData.credits) {
+      STATE.cortex.credits = cortexData.credits;
+      var cPct = cortexData.credits.usage_percent != null ? (100 - cortexData.credits.usage_percent).toFixed(1) : (cortexData.credits.percent_remaining != null ? cortexData.credits.percent_remaining : 100);
+      var trigMeta = $("trig-cortex-meta");
+      if (trigMeta) {
+        trigMeta.textContent = cPct + "%";
+      }
+      var badgeDock = $("badge-cortex");
+      if (badgeDock) {
+        badgeDock.removeAttribute("hidden");
+        badgeDock.textContent = cPct + "%";
+      }
+    }
+    if (cortexData.automated_tasks) {
+      STATE.cortex.tasks = cortexData.automated_tasks;
+    }
+    if (cortexData.streaming_point) {
+      STATE.cortex.streamingSeries.push(cortexData.streaming_point);
+      if (STATE.cortex.streamingSeries.length > 60) {
+        STATE.cortex.streamingSeries.shift();
+      }
+    }
+
+    var drawer = $("drawer-cortex");
+    if (drawer && !drawer.hasAttribute("hidden")) {
+      renderCortexMetrics();
+      renderCortexStreamingChart(STATE.cortex.streamingSeries);
+    }
+  }
+
+  function renderCortexMetrics() {
+    var c = STATE.cortex.credits;
+    var t = STATE.cortex.tasks;
+    var jobs = STATE.cortex.sqliteJobs || [];
+
+    if (c) {
+      var rem = c.credits_remaining != null ? c.credits_remaining : (c.remaining != null ? c.remaining : 100000);
+      var bud = c.total_budget || c.budget || 100000;
+      var pct = c.usage_percent != null ? Number((100 - c.usage_percent).toFixed(1)) : (c.percent_remaining != null ? c.percent_remaining : 100);
+      var burn = c.burn_rate_credits_per_min != null ? Math.round(c.burn_rate_credits_per_min) : (c.burn_rate_per_hour != null ? c.burn_rate_per_hour : 0);
+      var resetHours = c.reset_countdown_seconds != null ? Math.round(c.reset_countdown_seconds / 3600) : (c.reset_in_hours || 168);
+      var activeModel = c.active_model || c.unmetered_model || "Local models unmetered";
+
+      var bCredits = $("cortex-badge-credits");
+      if (bCredits) bCredits.textContent = rem.toLocaleString() + " CREDITS";
+
+      var bBurn = $("cortex-badge-burn");
+      if (bBurn) bBurn.textContent = burn + " / MIN";
+
+      var mCredits = $("cortex-metric-credits");
+      if (mCredits) mCredits.textContent = rem.toLocaleString();
+
+      var fill = $("cortex-credit-fill");
+      if (fill) fill.style.width = Math.max(0, Math.min(100, pct)) + "%";
+
+      var dCredits = $("cortex-credit-detail");
+      if (dCredits) dCredits.textContent = pct + "% remaining · Reset in " + resetHours + "h";
+
+      var mBurn = $("cortex-metric-burn");
+      if (mBurn) mBurn.textContent = burn.toLocaleString();
+
+      var dBurn = $("cortex-burn-detail");
+      if (dBurn) {
+        dBurn.textContent = activeModel;
+      }
+    }
+
+    if (t) {
+      var autoMode = !!(t.auto_accept_enabled != null ? t.auto_accept_enabled : t.auto_accept_mode);
+      var bMode = $("cortex-badge-mode");
+      if (bMode) {
+        bMode.textContent = autoMode ? "AUTO-ACCEPT: ON" : "AUTO-ACCEPT: OFF";
+        bMode.className = "tag " + (autoMode ? "ok" : "warn");
+      }
+
+      var mTasks = $("cortex-metric-tasks");
+      if (mTasks) {
+        var act = t.total_automated_tasks != null ? t.total_automated_tasks : (t.active_tasks_count != null ? t.active_tasks_count : (t.active_tasks ? t.active_tasks.length : 0));
+        mTasks.textContent = act + " Automated";
+      }
+
+      var dTasks = $("cortex-task-detail");
+      if (dTasks) {
+        var comp = t.auto_approved_count != null ? t.auto_approved_count : (t.completed_count || 0);
+        var pend = t.pending_review_count != null ? t.pending_review_count : (t.pending_count || 0);
+        dTasks.textContent = comp + " auto-approved · " + pend + " pending review";
+      }
+    }
+
+    var mJobs = $("cortex-metric-jobs");
+    if (mJobs) {
+      mJobs.textContent = jobs.length + " Total Jobs";
+    }
+  }
+
+  function renderCortexStreamingChart(series) {
+    var svg = $("cortex-chart-svg");
+    var overlay = $("cortex-chart-overlay");
+    if (!svg) return;
+
+    while (svg.firstChild) {
+      svg.removeChild(svg.firstChild);
+    }
+
+    var W = 800;
+    var H = 180;
+    var padT = 20;
+    var padB = 25;
+    var padL = 40;
+    var padR = 20;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+
+    // Draw background grid
+    for (var g = 0; g <= 4; g++) {
+      var y = padT + (plotH / 4) * g;
+      var line = document.createElementNS(SVG_NS, "line");
+      line.setAttribute("x1", String(padL));
+      line.setAttribute("y1", String(y));
+      line.setAttribute("x2", String(W - padR));
+      line.setAttribute("y2", String(y));
+      line.setAttribute("stroke", "rgba(255, 255, 255, 0.06)");
+      line.setAttribute("stroke-dasharray", "3 3");
+      svg.appendChild(line);
+    }
+
+    if (!series || series.length === 0) {
+      var txt = document.createElementNS(SVG_NS, "text");
+      txt.setAttribute("x", String(W / 2));
+      txt.setAttribute("y", String(H / 2));
+      txt.setAttribute("text-anchor", "middle");
+      txt.setAttribute("fill", "var(--muted)");
+      txt.setAttribute("font-size", "12");
+      txt.setAttribute("font-family", "var(--mono)");
+      txt.textContent = "Awaiting real-time Next Cortex telemetry stream...";
+      svg.appendChild(txt);
+      return;
+    }
+
+    var n = series.length;
+    var stepX = n > 1 ? (plotW / (n - 1)) : plotW;
+
+    var maxCredits = 100000;
+    var maxBurn = 100;
+    for (var i = 0; i < n; i++) {
+      var pt = series[i];
+      if (pt.burn_rate && pt.burn_rate > maxBurn) maxBurn = pt.burn_rate;
+      if (pt.active_jobs && (pt.active_jobs * 20) > maxBurn) maxBurn = pt.active_jobs * 20;
+    }
+
+    var creditPoints = [];
+    var burnPoints = [];
+    var jobPoints = [];
+
+    for (var j = 0; j < n; j++) {
+      var p = series[j];
+      var px = padL + j * stepX;
+
+      // Credit Y (inverted: 100k -> padT, 0 -> padT + plotH)
+      var credVal = (p.credits_remaining != null) ? p.credits_remaining : 100000;
+      var pyCred = padT + plotH - (credVal / maxCredits) * plotH;
+      creditPoints.push({ x: px, y: pyCred });
+
+      // Burn rate Y
+      var burnVal = (p.burn_rate != null) ? p.burn_rate : 0;
+      var pyBurn = padT + plotH - (burnVal / maxBurn) * plotH;
+      burnPoints.push({ x: px, y: pyBurn });
+
+      // Active jobs Y
+      var jobsVal = (p.active_jobs != null) ? (p.active_jobs * 20) : 0;
+      var pyJobs = padT + plotH - (jobsVal / maxBurn) * plotH;
+      jobPoints.push({ x: px, y: pyJobs });
+    }
+
+    function buildSvgPath(pts) {
+      if (pts.length === 0) return "";
+      var d = "M " + pts[0].x.toFixed(1) + " " + pts[0].y.toFixed(1);
+      for (var k = 1; k < pts.length; k++) {
+        d += " L " + pts[k].x.toFixed(1) + " " + pts[k].y.toFixed(1);
+      }
+      return d;
+    }
+
+    // Burn rate curve (gold dashed)
+    var pathBurn = document.createElementNS(SVG_NS, "path");
+    pathBurn.setAttribute("d", buildSvgPath(burnPoints));
+    pathBurn.setAttribute("fill", "none");
+    pathBurn.setAttribute("stroke", "var(--gold)");
+    pathBurn.setAttribute("stroke-width", "1.5");
+    pathBurn.setAttribute("stroke-dasharray", "4 2");
+    svg.appendChild(pathBurn);
+
+    // Active jobs curve (emerald)
+    var pathJobs = document.createElementNS(SVG_NS, "path");
+    pathJobs.setAttribute("d", buildSvgPath(jobPoints));
+    pathJobs.setAttribute("fill", "none");
+    pathJobs.setAttribute("stroke", "var(--emerald)");
+    pathJobs.setAttribute("stroke-width", "1.5");
+    svg.appendChild(pathJobs);
+
+    // Credit curve (cyan solid)
+    var pathCred = document.createElementNS(SVG_NS, "path");
+    pathCred.setAttribute("d", buildSvgPath(creditPoints));
+    pathCred.setAttribute("fill", "none");
+    pathCred.setAttribute("stroke", "var(--cyan)");
+    pathCred.setAttribute("stroke-width", "2.2");
+    svg.appendChild(pathCred);
+
+    // Latest pulse dot
+    var lastCred = creditPoints[creditPoints.length - 1];
+    if (lastCred) {
+      var cGlow = document.createElementNS(SVG_NS, "circle");
+      cGlow.setAttribute("cx", lastCred.x.toFixed(1));
+      cGlow.setAttribute("cy", lastCred.y.toFixed(1));
+      cGlow.setAttribute("r", "7");
+      cGlow.setAttribute("fill", "none");
+      cGlow.setAttribute("stroke", "var(--cyan)");
+      cGlow.setAttribute("stroke-opacity", "0.5");
+      svg.appendChild(cGlow);
+
+      var cDot = document.createElementNS(SVG_NS, "circle");
+      cDot.setAttribute("cx", lastCred.x.toFixed(1));
+      cDot.setAttribute("cy", lastCred.y.toFixed(1));
+      cDot.setAttribute("r", "3.5");
+      cDot.setAttribute("fill", "var(--cyan)");
+      svg.appendChild(cDot);
+    }
+
+    // Overlay text
+    if (overlay && n > 0) {
+      var latest = series[n - 1];
+      overlay.textContent = "Latest: " + (latest.credits_remaining || 0).toLocaleString() + " credits · Burn: " + (latest.burn_rate || 0) + "/hr · Jobs: " + (latest.active_jobs || 0);
+    }
+  }
+
+  function renderCortexHierarchy(hierarchy) {
+    var container = $("cortex-dag-container");
+    if (!container) return;
+    clear(container);
+
+    if (!hierarchy || (!Array.isArray(hierarchy.tiers) && !Array.isArray(hierarchy.layers))) {
+      container.appendChild(h("span", { className: "mono muted sm-txt", text: "No hierarchy data available." }));
+      return;
+    }
+
+    // Support both layers+nodes schema and legacy tiers schema
+    if (Array.isArray(hierarchy.layers) && Array.isArray(hierarchy.nodes)) {
+      hierarchy.layers.forEach(function (layer) {
+        var row = h("div", { className: "cortex-tier-row" });
+        var label = h("div", { className: "cortex-tier-label", text: "TIER " + layer.layer + " // " + layer.name.toUpperCase() });
+        var nodesWrap = h("div", { className: "cortex-tier-nodes" });
+
+        var layerNodes = hierarchy.nodes.filter(function (n) { return n.layer === layer.layer; });
+        // Cap displayed nodes per tier for clean UI readability if many jobs/events
+        var displayNodes = layerNodes.slice(0, 12);
+
+        displayNodes.forEach(function (node) {
+          var isSel = (STATE.cortex.selectedNodeId === node.id);
+          var nodeEl = h("div", {
+            className: "cortex-dag-node" + (isSel ? " active" : ""),
+            attrs: { "data-node-id": node.id, "data-tier-id": String(layer.layer) }
+          });
+
+          var left = h("div", { style: "display: flex; align-items: center; gap: 6px;" });
+          var dot = h("span", { className: "node-indicator " + (node.status === "sealed" ? "ok" : (node.state === "running" ? "warn" : (node.status || "ok"))) });
+          var name = h("strong", { text: node.name || node.id });
+          left.appendChild(dot);
+          left.appendChild(name);
+
+          var metricTxt = node.metric || node.state || node.status || node.type || "active";
+          var right = h("span", { className: "tag sm mono", text: metricTxt });
+
+          nodeEl.appendChild(left);
+          nodeEl.appendChild(right);
+
+          nodeEl.addEventListener("click", function () {
+            selectCortexNode(node.id, "Tier " + layer.layer + ": " + layer.name, node);
+          });
+
+          nodesWrap.appendChild(nodeEl);
+        });
+
+        if (layerNodes.length > 12) {
+          var moreTag = h("span", { className: "tag sm mono muted", text: "+" + (layerNodes.length - 12) + " more" });
+          nodesWrap.appendChild(moreTag);
+        }
+
+        row.appendChild(label);
+        row.appendChild(nodesWrap);
+        container.appendChild(row);
+      });
+    } else if (Array.isArray(hierarchy.tiers)) {
+      hierarchy.tiers.forEach(function (tier) {
+        var row = h("div", { className: "cortex-tier-row" });
+        var label = h("div", { className: "cortex-tier-label", text: tier.title || tier.tier_id });
+        var nodesWrap = h("div", { className: "cortex-tier-nodes" });
+
+        if (Array.isArray(tier.nodes)) {
+          tier.nodes.forEach(function (node) {
+            var isSel = (STATE.cortex.selectedNodeId === node.id);
+            var nodeEl = h("div", {
+              className: "cortex-dag-node" + (isSel ? " active" : ""),
+              attrs: { "data-node-id": node.id, "data-tier-id": tier.tier_id }
+            });
+
+            var left = h("div", { style: "display: flex; align-items: center; gap: 6px;" });
+            var dot = h("span", { className: "node-indicator " + (node.status || "ok") });
+            var name = h("strong", { text: node.name || node.id });
+            left.appendChild(dot);
+            left.appendChild(name);
+
+            var right = h("span", { className: "tag sm mono", text: node.metric || (node.credits_allocated ? (node.credits_allocated + " cr") : node.type) });
+
+            nodeEl.appendChild(left);
+            nodeEl.appendChild(right);
+
+            nodeEl.addEventListener("click", function () {
+              selectCortexNode(node.id, tier.title || tier.tier_id, node);
+            });
+
+            nodesWrap.appendChild(nodeEl);
+          });
+        }
+
+        row.appendChild(label);
+        row.appendChild(nodesWrap);
+        container.appendChild(row);
+      });
+    }
+  }
+
+  function selectCortexNode(nodeId, tierTitle, node) {
+    STATE.cortex.selectedNodeId = nodeId;
+
+    // Highlight active node in DOM
+    document.querySelectorAll(".cortex-dag-node").forEach(function (el) {
+      if (el.getAttribute("data-node-id") === nodeId) {
+        el.classList.add("active");
+      } else {
+        el.classList.remove("active");
+      }
+    });
+
+    var badge = $("cortex-active-filter-badge");
+    if (badge) {
+      badge.textContent = (tierTitle || "SCOPE").toUpperCase();
+    }
+
+    var title = $("cortex-sel-node-title");
+    if (title) {
+      title.textContent = (node ? node.name : nodeId) + " (ID: " + nodeId + ")";
+    }
+
+    var desc = $("cortex-sel-node-desc");
+    if (desc) {
+      var descTxt = node ? (node.description || ("Type: " + (node.type || "scope") + " · Status: " + (node.status || node.state || "active"))) : "Operational scope";
+      if (node && node.credits_allocated) {
+        descTxt += " · Allocated Budget: " + node.credits_allocated.toLocaleString() + " credits";
+      }
+      desc.textContent = descTxt;
+    }
+
+    // Coordinated Views: Filter SQLite jobs table based on active node
+    var allJobs = STATE.cortex.sqliteJobs || [];
+    var filtered = allJobs;
+
+    if (!node || node.layer === 1 || nodeId === "tier1-aios" || nodeId === "tier1-ledger" || nodeId === "governance_core") {
+      filtered = allJobs;
+    } else if (node.type === "scope" || (node.id && node.id.indexOf("scope-") === 0)) {
+      var scopeKey = node.scope || (node.id ? node.id.replace("scope-", "") : "");
+      filtered = allJobs.filter(function (j) {
+        return (j.scope_id === scopeKey || (j.scope_id && j.scope_id.indexOf(scopeKey) !== -1));
+      });
+    } else if (node.type === "job" || (node.id && node.id.indexOf("job-") === 0)) {
+      var jKey = node.job_id || (node.id ? node.id.replace("job-", "") : "");
+      filtered = allJobs.filter(function (j) {
+        return (j.job_id === jKey || (j.job_id && j.job_id.indexOf(jKey) !== -1));
+      });
+    } else if (node.type === "diode" || (node.id && node.id.indexOf("event-") === 0)) {
+      filtered = allJobs.filter(function (j) {
+        return (j.state === "quarantined" || j.state === "failed" || j.state === "completed");
+      });
+    }
+
+    renderCortexSqliteTable(filtered);
+  }
+
+  function renderCortexSqliteTable(jobs) {
+    var tbody = $("cortex-sqlite-tbody");
+    if (!tbody) return;
+    clear(tbody);
+
+    if (!jobs || jobs.length === 0) {
+      var tr = h("tr");
+      var td = h("td", { attrs: { colspan: "5" }, text: "No jobs matching active scope." });
+      td.style.textAlign = "center";
+      td.style.color = "var(--muted)";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    jobs.forEach(function (j) {
+      var tr = h("tr");
+      var jId = String(j.job_id || "");
+      var jShort = jId.length > 12 ? (jId.slice(0, 12) + "…") : jId;
+
+      var tdId = h("td", { className: "mono sm-txt", text: jShort, attrs: { title: jId } });
+      var tdScope = h("td", { className: "mono sm-txt", text: j.scope_id || "default" });
+      var tdType = h("td", { className: "sm-txt", text: j.job_type || "job" });
+
+      var stClass = (j.state === "completed" || j.state === "done") ? "ok" : ((j.state === "running") ? "info" : "warn");
+      var tdState = h("td");
+      tdState.appendChild(h("span", { className: "tag sm " + stClass, text: j.state || "unknown" }));
+
+      var tdUp = h("td", { className: "mono sm-txt muted", text: (j.updated_at || "").replace("T", " ").slice(0, 19) });
+
+      tr.appendChild(tdId);
+      tr.appendChild(tdScope);
+      tr.appendChild(tdType);
+      tr.appendChild(tdState);
+      tr.appendChild(tdUp);
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderCortexTasks(tasksData) {
+    var list = $("cortex-task-list");
+    if (!list) return;
+    clear(list);
+
+    var tasks = (tasksData && Array.isArray(tasksData.tasks)) ? tasksData.tasks : [];
+    if (tasks.length === 0) {
+      list.appendChild(h("span", { className: "mono muted sm-txt", text: "No automated tasks currently queued." }));
+      return;
+    }
+
+    tasks.forEach(function (task) {
+      var card = h("div", { className: "cortex-task-card" });
+      var left = h("div", { style: "display: flex; flex-direction: column; gap: 2px;" });
+      left.appendChild(h("strong", { className: "mono sm-txt", text: task.name || task.task_id }));
+      left.appendChild(h("span", { className: "muted sm-txt", text: (task.task_type || "task") + " · Trigger: " + (task.trigger || "cron") }));
+
+      var right = h("div", { style: "display: flex; align-items: center; gap: 6px;" });
+      right.appendChild(h("span", { className: "tag sm " + (task.state === "running" ? "info" : "ok"), text: task.state || "queued" }));
+      if (task.auto_accepted) {
+        right.appendChild(h("span", { className: "tag sm ok", text: "AUTO" }));
+      }
+
+      card.appendChild(left);
+      card.appendChild(right);
+      list.appendChild(card);
+    });
+  }
+
+  // ==================== SHARED SHORT-TERM MEMORY PROTOCOL & OBSIDIAN VAULT SYNC ====================
+  function wireMemoryDrawer() {
+    var syncBtn = $("mem-btn-sync-obsidian");
+    if (syncBtn) {
+      syncBtn.addEventListener("click", function () {
+        syncObsidianVault();
+      });
+    }
+
+    var forceSyncBtn = $("mem-btn-force-sync");
+    if (forceSyncBtn) {
+      forceSyncBtn.addEventListener("click", function () {
+        syncObsidianVault();
+      });
+    }
+
+    var refBtn = $("mem-btn-refresh");
+    if (refBtn) {
+      refBtn.addEventListener("click", function () {
+        loadMemoryDrawer();
+      });
+    }
+
+    var bbForm = $("mem-bb-form");
+    if (bbForm) {
+      bbForm.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        var keyInput = $("mem-bb-key");
+        var valInput = $("mem-bb-val");
+        var agentSelect = $("mem-bb-agent");
+        var ttlInput = $("mem-bb-ttl");
+
+        var key = keyInput ? keyInput.value.trim() : "";
+        var valRaw = valInput ? valInput.value.trim() : "";
+        var writer = agentSelect ? agentSelect.value : "agent-supervisor";
+        var ttl = ttlInput && ttlInput.value ? parseInt(ttlInput.value, 10) : undefined;
+
+        if (!key) return;
+
+        var valParsed = valRaw;
+        try {
+          valParsed = JSON.parse(valRaw);
+        } catch (e) {
+          // Keep as string
+        }
+
+        var postBody = {
+          key: key,
+          value: valParsed,
+          writer_agent_id: writer
+        };
+        if (ttl) postBody.ttl_seconds = ttl;
+
+        api("/api/memory/blackboard", {
+          method: "POST",
+          body: postBody
+        }).then(function (res) {
+          toast("Blackboard key '" + key + "' set (v" + (res.entry ? res.entry.version : 1) + ")");
+          if (valInput) valInput.value = "";
+          loadMemoryDrawer();
+        }).catch(function (err) {
+          toast("Error setting key: " + err.message);
+        });
+      });
+    }
+  }
+
+  function syncObsidianVault() {
+    var syncBtn = $("mem-btn-sync-obsidian");
+    var forceBtn = $("mem-btn-force-sync");
+    if (syncBtn) syncBtn.textContent = "Syncing...";
+    if (forceBtn) forceBtn.textContent = "Syncing...";
+
+    api("/api/memory/sync-obsidian", { method: "POST", body: {} })
+      .then(function (res) {
+        toast("Obsidian Vault Synchronized: " + (res.written_files_count || 0) + " files written");
+        loadMemoryDrawer();
+      })
+      .catch(function (err) {
+        toast("Vault sync error: " + err.message);
+      })
+      .finally(function () {
+        if (syncBtn) syncBtn.textContent = "📓 Sync Obsidian Vault";
+        if (forceBtn) forceBtn.textContent = "⚡ Force Vault Resync Now";
+      });
+  }
+
+  function loadMemoryDrawer() {
+    Promise.all([
+      api("/api/memory/state").catch(function () { return null; }),
+      api("/api/memory/tasks?limit=50").catch(function () { return null; })
+    ]).then(function (results) {
+      var state = results[0];
+      var tasksData = results[1];
+
+      if (state) {
+        STATE.memory.epoch = state.epoch || 1;
+        STATE.memory.agents = state.agents || [];
+        STATE.memory.blackboard = state.blackboard || {};
+        STATE.memory.vaultSyncStatus = state.vault_sync_status || null;
+      }
+      if (tasksData && Array.isArray(tasksData.tasks)) {
+        STATE.memory.tasks = tasksData.tasks;
+      }
+
+      renderMemoryMetrics();
+      renderMemoryAgents(STATE.memory.agents);
+      renderMemoryBlackboard(STATE.memory.blackboard);
+      renderMemoryTasks(STATE.memory.tasks);
+      renderMemoryObsidian(STATE.memory.vaultSyncStatus);
+    }).catch(function (err) {
+      toast("Error loading memory state: " + err.message);
+    });
+  }
+
+  function applyMemoryTelemetry(mem) {
+    if (!mem) return;
+    STATE.memory.epoch = mem.epoch || STATE.memory.epoch;
+    if (Array.isArray(mem.agents)) STATE.memory.agents = mem.agents;
+    if (mem.blackboard) STATE.memory.blackboard = mem.blackboard;
+    if (mem.vault_sync_status) STATE.memory.vaultSyncStatus = mem.vault_sync_status;
+
+    var trigMeta = $("trig-mem-meta");
+    if (trigMeta) {
+      trigMeta.textContent = "EPOCH " + STATE.memory.epoch;
+    }
+
+    var badgeDock = $("badge-memory");
+    if (badgeDock) {
+      badgeDock.removeAttribute("hidden");
+      badgeDock.textContent = String(STATE.memory.epoch);
+    }
+
+    var drawer = $("drawer-memory");
+    if (drawer && !drawer.hasAttribute("hidden")) {
+      renderMemoryMetrics();
+      renderMemoryAgents(STATE.memory.agents);
+      renderMemoryBlackboard(STATE.memory.blackboard);
+      renderMemoryObsidian(STATE.memory.vaultSyncStatus);
+    }
+  }
+
+  function renderMemoryMetrics() {
+    var agents = STATE.memory.agents || [];
+    var tasks = STATE.memory.tasks || [];
+    var bb = STATE.memory.blackboard || {};
+    var bbKeys = Object.keys(bb);
+    var epoch = STATE.memory.epoch || 1;
+    var syncSt = STATE.memory.vaultSyncStatus;
+
+    var bSync = $("mem-badge-sync");
+    if (bSync) {
+      var isSynced = syncSt && syncSt.status === "SYNCHRONIZED";
+      bSync.textContent = isSynced ? "SYNCED" : (syncSt ? syncSt.status : "READY");
+      bSync.className = "tag " + (isSynced ? "ok" : "info");
+    }
+
+    var bTasks = $("mem-badge-tasks");
+    if (bTasks) bTasks.textContent = tasks.length + " TASKS";
+
+    var bAgents = $("mem-badge-agents");
+    if (bAgents) bAgents.textContent = agents.length + " AGENTS";
+
+    var bEpoch = $("mem-badge-epoch");
+    if (bEpoch) bEpoch.textContent = "EPOCH " + epoch;
+
+    var mAgents = $("mem-metric-agents");
+    if (mAgents) mAgents.textContent = agents.length + " Online";
+
+    var mTasks = $("mem-metric-tasks");
+    if (mTasks) mTasks.textContent = tasks.length + " Tasks";
+
+    var mKeys = $("mem-metric-keys");
+    if (mKeys) mKeys.textContent = bbKeys.length + " Keys";
+
+    var mObsidian = $("mem-metric-obsidian");
+    if (mObsidian) {
+      mObsidian.textContent = (syncSt && syncSt.status) ? syncSt.status : "SYNCHRONIZED";
+      mObsidian.className = "cortex-metric-val mono " + ((syncSt && syncSt.status === "SYNCHRONIZED") ? "text-emerald" : "text-cyan");
+    }
+  }
+
+  function renderMemoryAgents(agents) {
+    var container = $("mem-agents-container");
+    if (!container) return;
+    clear(container);
+
+    if (!agents || agents.length === 0) {
+      container.appendChild(h("span", { className: "mono muted sm-txt", text: "No agents currently active in SSTM roster." }));
+      return;
+    }
+
+    agents.forEach(function (ag) {
+      var card = h("div", { className: "mem-agent-card" });
+
+      var header = h("div", { className: "mem-agent-header" });
+      var name = h("span", { className: "mem-agent-name", text: ag.agent_id });
+      var stCls = (ag.operational_state === "busy") ? "info" : ((ag.operational_state === "quarantined") ? "err" : "ok");
+      var stTag = h("span", { className: "tag sm " + stCls, text: (ag.operational_state || "idle").toUpperCase() });
+      header.appendChild(name);
+      header.appendChild(stTag);
+
+      var roleRow = h("div", { className: "mem-agent-role", text: "Role: " + (ag.role || "worker") });
+
+      var taskText = ag.current_task_id ? ("Current: " + ag.current_task_id) : ("Tasks Done: " + (ag.tasks_completed_count || 0));
+      var taskRow = h("div", { className: "mem-agent-task", text: taskText });
+
+      var foot = h("div", { style: "display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--muted);" });
+      var hbText = (ag.last_heartbeat_iso || "").replace("T", " ").slice(11, 19);
+      foot.appendChild(h("span", { className: "mono", text: "HB: " + (hbText || "now") }));
+      if (ag.capabilities && ag.capabilities.length > 0) {
+        foot.appendChild(h("span", { className: "tag sm mono", text: ag.capabilities.length + " caps" }));
+      }
+
+      card.appendChild(header);
+      card.appendChild(roleRow);
+      card.appendChild(taskRow);
+      card.appendChild(foot);
+      container.appendChild(card);
+    });
+  }
+
+  function renderMemoryBlackboard(bb) {
+    var tbody = $("mem-bb-tbody");
+    if (!tbody) return;
+    clear(tbody);
+
+    var keys = Object.keys(bb || {});
+    if (keys.length === 0) {
+      var tr = h("tr");
+      var td = h("td", { attrs: { colspan: "5" }, text: "Shared blackboard is empty. Use the form above to record state." });
+      td.style.textAlign = "center";
+      td.style.color = "var(--muted)";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    keys.forEach(function (k) {
+      var entry = bb[k];
+      var tr = h("tr");
+
+      var tdKey = h("td", { className: "mono bold sm-txt", text: k });
+
+      var valStr = typeof entry.value === "object" ? JSON.stringify(entry.value) : String(entry.value);
+      if (valStr.length > 40) valStr = valStr.slice(0, 38) + "…";
+      var tdVal = h("td", { className: "mono sm-txt", text: valStr, attrs: { title: typeof entry.value === "object" ? JSON.stringify(entry.value, null, 2) : String(entry.value) } });
+
+      var tdWriter = h("td");
+      tdWriter.appendChild(h("span", { className: "tag sm mono", text: entry.writer_agent_id || "agent" }));
+
+      var tdVer = h("td", { className: "mono sm-txt", text: "v" + (entry.version || 1) });
+
+      var upTime = (entry.updated_at_iso || "").replace("T", " ").slice(11, 19);
+      var tdUp = h("td", { className: "mono sm-txt muted", text: upTime + (entry.ttl_seconds ? (" (TTL " + entry.ttl_seconds + "s)") : "") });
+
+      tr.appendChild(tdKey);
+      tr.appendChild(tdVal);
+      tr.appendChild(tdWriter);
+      tr.appendChild(tdVer);
+      tr.appendChild(tdUp);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderMemoryTasks(tasks) {
+    var tbody = $("mem-tasks-tbody");
+    var countTag = $("mem-tasks-count-tag");
+    if (!tbody) return;
+    clear(tbody);
+
+    if (countTag) countTag.textContent = (tasks ? tasks.length : 0) + " LOGGED";
+
+    if (!tasks || tasks.length === 0) {
+      var tr = h("tr");
+      var td = h("td", { attrs: { colspan: "6" }, text: "No completed tasks recorded in short-term memory yet." });
+      td.style.textAlign = "center";
+      td.style.color = "var(--muted)";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    tasks.forEach(function (t) {
+      var tr = h("tr");
+
+      var tId = String(t.task_id || "");
+      var tShort = tId.length > 14 ? (tId.slice(0, 14) + "…") : tId;
+      var tdId = h("td", { className: "mono bold sm-txt", text: tShort, attrs: { title: tId } });
+
+      var tdAg = h("td", { className: "mono sm-txt", text: t.agent_id || "unknown" });
+      var tdType = h("td", { className: "sm-txt", text: t.task_type || "task" });
+
+      var isOk = (t.status === "completed" || t.status === "ok");
+      var tdSt = h("td");
+      tdSt.appendChild(h("span", { className: "tag sm " + (isOk ? "ok" : "warn"), text: t.status || "completed" }));
+
+      var durTxt = (t.duration_ms != null) ? (t.duration_ms + " ms") : "—";
+      var tdDur = h("td", { className: "mono sm-txt", text: durTxt });
+
+      var timeTxt = (t.timestamp_iso || "").replace("T", " ").slice(11, 19);
+      var tdTime = h("td", { className: "mono sm-txt muted", text: timeTxt });
+
+      tr.appendChild(tdId);
+      tr.appendChild(tdAg);
+      tr.appendChild(tdType);
+      tr.appendChild(tdSt);
+      tr.appendChild(tdDur);
+      tr.appendChild(tdTime);
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderMemoryObsidian(syncStatus) {
+    var pill = $("mem-obsidian-pill");
+    var lastSync = $("mem-last-sync-time");
+
+    if (pill) {
+      var st = (syncStatus && syncStatus.status) ? syncStatus.status : "READY";
+      pill.textContent = st;
+      pill.className = "tag " + (st === "SYNCHRONIZED" ? "ok" : "info");
+    }
+
+    if (lastSync) {
+      var ts = (syncStatus && syncStatus.last_synced_at) ? syncStatus.last_synced_at.replace("T", " ").slice(0, 19) : "Just now";
+      lastSync.textContent = "Last Synced: " + ts;
     }
   }
 
@@ -3350,6 +4315,8 @@
     wireSystemsView();
     wireQuarantineDrawer();
     wireGatewayDrawer();
+    wireCortexDrawer();
+    wireMemoryDrawer();
     updateClock();
     setInterval(updateClock, 1000);
     loadBoard();

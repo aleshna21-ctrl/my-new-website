@@ -2047,3 +2047,382 @@ details.goal-item[open] > summary {
 .th-gw-dur { width: 85px; }
 .th-gw-time { width: 155px; }
 .th-gw-out { }
+
+/* ==================== NEXT CORTEX DASHBOARD ==================== */
+.cortex-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cortex-metric-card {
+  background: #090e18;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s ease;
+}
+
+.cortex-metric-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.cortex-metric-val {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.cortex-progress-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 4px 0;
+}
+
+.cortex-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan), var(--emerald));
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.text-cyan { color: var(--cyan) !important; }
+.text-gold { color: var(--gold) !important; }
+.text-emerald { color: var(--emerald) !important; }
+
+.cortex-coordinated-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+}
+
+.cortex-viz-column, .cortex-inspect-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cortex-panel {
+  background: #0b111e;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cortex-panel.full-height {
+  height: 100%;
+}
+
+.cortex-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 8px;
+}
+
+.cortex-panel-header h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cortex-chart-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 11px;
+  font-family: var(--mono);
+}
+
+.legend-chip.cyan { color: var(--cyan); }
+.legend-chip.gold { color: var(--gold); }
+.legend-chip.emerald { color: var(--emerald); }
+
+.cortex-chart-wrap {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  background: #060910;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+#cortex-chart-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cortex-chart-overlay {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.cortex-dag-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.cortex-tier-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cortex-tier-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.cortex-tier-nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cortex-dag-node {
+  background: #0d1524;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: all 0.2s ease;
+  user-select: none;
+  font-size: 11px;
+  font-family: var(--sans);
+}
+
+.cortex-dag-node:hover {
+  border-color: var(--border-hi);
+  background: #131e33;
+}
+
+.cortex-dag-node.active {
+  border-color: var(--cyan);
+  background: rgba(6, 182, 212, 0.15);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.25);
+}
+
+.cortex-dag-node .node-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.cortex-dag-node .node-indicator.ok { background: var(--emerald); box-shadow: 0 0 6px var(--emerald); }
+.cortex-dag-node .node-indicator.info { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+.cortex-dag-node .node-indicator.warn { background: var(--gold); box-shadow: 0 0 6px var(--gold); }
+
+.cortex-scope-summary {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cortex-table-wrap {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cortex-table th, .cortex-table td {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+.cortex-tasks-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cortex-subhead {
+  margin: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+
+.cortex-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.cortex-task-card {
+  background: #070b14;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+/* ==================== SHARED SHORT-TERM MEMORY & OBSIDIAN VAULT SYNC ==================== */
+.mem-agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.mem-agent-card {
+  background: #080d18;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.mem-agent-card:hover {
+  border-color: var(--border-hi);
+  background: #0d1526;
+}
+
+.mem-agent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.mem-agent-name {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mem-agent-role {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--cyan);
+}
+
+.mem-agent-task {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mem-bb-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.mem-input, .mem-select {
+  background: #060a12;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 5px 8px;
+  flex: 1 1 140px;
+}
+
+.mem-ttl-input {
+  flex: 0 0 100px;
+}
+
+.mem-input:focus, .mem-select:focus {
+  border-color: var(--cyan);
+  outline: none;
+}
+
+.mem-table-wrap {
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.mem-obsidian-details {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mem-vault-path-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #060912;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mem-vault-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mem-vault-note-item {
+  background: #080e1b;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+
+.mem-sync-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+

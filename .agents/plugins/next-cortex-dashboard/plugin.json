@@ -1,0 +1,26 @@
+{
+  "name": "next-cortex-dashboard",
+  "displayName": "Next Cortex Anti-Gravity Dashboard",
+  "version": "1.2.0",
+  "description": "Antigravity IDE local quota monitor, credit usage tracker, automated tasks agent, and real-time visualization toolkit.",
+  "author": {
+    "name": "Next Cortex",
+    "url": "https://github.com/nextcortex/antigravity-dashboard"
+  },
+  "license": "MIT",
+  "keywords": [
+    "antigravity",
+    "dashboard",
+    "cortex",
+    "credits",
+    "quota",
+    "automated-tasks",
+    "visualization",
+    "sqlite",
+    "hierarchy"
+  ],
+  "skills": [
+    "next-cortex-monitor",
+    "realtime-visualization"
+  ]
+}
