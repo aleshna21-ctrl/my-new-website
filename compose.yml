@@ -1,8 +1,57 @@
 # ==============================================================================
-# AIOS Command Center - Docker Compose Configuration
+# AIOS Command Center & Hermes Gateway - Docker Compose Configuration
 # Optimized for Hostinger VPS & Production Deployments
 # ==============================================================================
 services:
+  hermes:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aios-command-center:latest
+    container_name: hermes-gateway-daemon
+    restart: unless-stopped
+    command: ["python", "-B", "hermes_8080_server.py"]
+
+    # Bind loopback port 8080 on the host
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    environment:
+      - HERMES_8080_HOST=0.0.0.0
+      - HERMES_8080_PORT=8080
+      - OLLAMA_UPSTREAM=${OLLAMA_UPSTREAM:-http://host.docker.internal:11434}
+      - HERMES_DEFAULT_MODEL=${HERMES_MODEL:-qwen3:4b}
+      - HERMES_GATEWAY_SECRET=${HERMES_GATEWAY_SECRET:-hermes-aios-sec-gate-v1-4f9e8a7c2b}
+      - HUD_DATA_DIR=/app/data
+      - TZ=${TZ:-UTC}
+
+    volumes:
+      - aios-data:/app/data
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/gateway/v1/health', timeout=3)\" || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
   aios-app:
     build:
       context: .
@@ -10,6 +59,8 @@ services:
     image: aios-command-center:latest
     container_name: aios-command-center
     restart: unless-stopped
+    depends_on:
+      - hermes
 
     # Port configuration:
     # Set HUD_BIND_IP=127.0.0.1 in .env if using a reverse proxy (Nginx/Caddy) on the host.
@@ -24,8 +75,11 @@ services:
       - HUD_SCRATCH_DIR=/app/scratch
       - HUD_CALENDAR_DIR=/app/calendar
       - SECOND_BRAIN_DIR=/app/vault
-      - HERMES_ENDPOINT=${HERMES_ENDPOINT:-http://127.0.0.1:8080/v1/chat/completions}
+      - HERMES_ENDPOINT=${HERMES_ENDPOINT:-http://hermes:8080/v1/chat/completions}
+      - HERMES_GATEWAY_URL=${HERMES_GATEWAY_URL:-http://hermes:8080/gateway/v1/rpc}
+      - HERMES_AGENT_URL=${HERMES_AGENT_URL:-http://host.docker.internal:32768}
       - HERMES_MODEL=${HERMES_MODEL:-qwen3:4b}
+      - HERMES_GATEWAY_SECRET=${HERMES_GATEWAY_SECRET:-hermes-aios-sec-gate-v1-4f9e8a7c2b}
       - TZ=${TZ:-UTC}
 
     volumes:
@@ -37,6 +91,9 @@ services:
       - ./vault:/app/vault:ro
       # Read-only mount for external .ics calendar sync
       - ./calendar:/app/calendar:ro
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     # Production hardening & resource governance
     security_opt:

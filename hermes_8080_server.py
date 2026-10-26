@@ -13,7 +13,7 @@ import time
 import urllib.request
 import urllib.error
 
-HOST = os.environ.get("HERMES_8080_HOST", "127.0.0.1")
+HOST = os.environ.get("HERMES_8080_HOST", "0.0.0.0")
 PORT = int(os.environ.get("HERMES_8080_PORT", "8080"))
 UPSTREAM_BASE = os.environ.get("OLLAMA_UPSTREAM", "http://127.0.0.1:11434")
 DEFAULT_MODEL = os.environ.get("HERMES_DEFAULT_MODEL", "qwen3:4b")

@@ -453,7 +453,7 @@ def execute_task_command(command: str, params: Dict[str, Any]) -> Dict[str, Any]
                 "messages": [{"role": "user", "content": prompt}],
                 "max_tokens": 150
             }).encode("utf-8")
-            model_url = "http://127.0.0.1:8080/v1/chat/completions"
+            model_url = os.environ.get("HERMES_ENDPOINT", "http://127.0.0.1:8080/v1/chat/completions")
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
             req = urllib.request.Request(model_url, data=req_body, headers={"Content-Type": "application/json"})
             try:

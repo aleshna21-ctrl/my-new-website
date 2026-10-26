@@ -58,6 +58,30 @@ def get_hermes_endpoint() -> str:
 def get_hermes_model() -> str:
     return os.environ.get("HERMES_MODEL", "qwen3:4b")
 
+def get_hermes_base_url() -> str:
+    gw_url = os.environ.get("HERMES_GATEWAY_URL", "")
+    if gw_url:
+        try:
+            u = urllib.parse.urlsplit(gw_url)
+            return f"{u.scheme}://{u.netloc}"
+        except Exception:
+            pass
+    endpoint = get_hermes_endpoint()
+    try:
+        u = urllib.parse.urlsplit(endpoint)
+        return f"{u.scheme}://{u.netloc}"
+    except Exception:
+        return "http://127.0.0.1:8080"
+
+def get_hermes_gateway_rpc_url() -> str:
+    return os.environ.get("HERMES_GATEWAY_URL", f"{get_hermes_base_url()}/gateway/v1/rpc")
+
+def get_hermes_gateway_health_url() -> str:
+    return f"{get_hermes_base_url()}/gateway/v1/health"
+
+def get_hermes_agent_url() -> str:
+    return os.environ.get("HERMES_AGENT_URL", "http://127.0.0.1:32768")
+
 def get_hermes_models_url() -> str:
     endpoint = get_hermes_endpoint()
     try:
@@ -70,7 +94,7 @@ def get_hermes_models_url() -> str:
             models_path = "/v1/models"
         return f"{url.scheme}://{url.netloc}{models_path}"
     except Exception:
-        return "http://127.0.0.1:8080/v1/models"
+        return f"{get_hermes_base_url()}/v1/models"
 
 def probe_hermes_live() -> dict:
     url = get_hermes_models_url()
@@ -453,8 +477,10 @@ def get_gateway_status() -> dict:
     import urllib.request
     hermes_online = False
     hermes_svc = None
+    rpc_url = get_hermes_gateway_rpc_url()
+    health_url = get_hermes_gateway_health_url()
     try:
-        req = urllib.request.Request("http://127.0.0.1:8080/gateway/v1/health")
+        req = urllib.request.Request(health_url)
         with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=1.2) as resp:
             if resp.status == 200:
                 h_data = json.loads(resp.read().decode("utf-8"))
@@ -462,6 +488,16 @@ def get_gateway_status() -> dict:
                 hermes_svc = h_data.get("service")
     except Exception:
         hermes_online = False
+
+    # Check Hostinger Hermes Agent loopback / proxy reachability
+    hermes_agent_online = False
+    agent_url = get_hermes_agent_url()
+    try:
+        req_agent = urllib.request.Request(agent_url)
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req_agent, timeout=0.8) as resp_ag:
+            hermes_agent_online = resp_ag.status in (200, 302)
+    except Exception:
+        hermes_agent_online = False
 
     crons = load_cron_registry()
     tasks = load_task_history()
@@ -472,8 +508,10 @@ def get_gateway_status() -> dict:
         "auth_method": "HMAC-SHA256 (Anti-Replay Nonce + Timestamp)",
         "hermes_online": hermes_online,
         "hermes_service": hermes_svc or "hermes-8080",
-        "endpoint_hermes": "http://127.0.0.1:8080/gateway/v1/rpc",
-        "endpoint_aios": "http://127.0.0.1:5050/api/gateway/hermes",
+        "hermes_agent_online": hermes_agent_online,
+        "hermes_agent_url": agent_url,
+        "endpoint_hermes": rpc_url,
+        "endpoint_aios": os.environ.get("AIOS_GATEWAY_URL", "http://127.0.0.1:5050/api/gateway/hermes"),
         "crons_total": len(crons),
         "crons_enabled": sum(1 for c in crons if c.get("enabled")),
         "tasks_executed": len(tasks),
@@ -1262,7 +1300,7 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                 dispatch_remote = bool(body.get("remote", False))
 
                 if dispatch_remote:
-                    res = send_signed_rpc("http://127.0.0.1:8080/gateway/v1/rpc", "hermes.task.execute", {"command": cmd, **params})
+                    res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.task.execute", {"command": cmd, **params})
                     self._send_json(res)
                 else:
                     task_res = execute_task_command(cmd, params)
@@ -1276,7 +1314,7 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                     if action == "trigger":
                         dispatch_remote = bool(body.get("remote", False))
                         if dispatch_remote:
-                            res = send_signed_rpc("http://127.0.0.1:8080/gateway/v1/rpc", "hermes.cron.trigger", {"id": cron_id})
+                            res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.cron.trigger", {"id": cron_id})
                             self._send_json(res)
                         else:
                             outcome = trigger_cron_job(cron_id)
@@ -1294,7 +1332,7 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
             elif self.path == "/api/gateway/board/sync":
                 dispatch_remote = bool(body.get("remote", False))
                 if dispatch_remote:
-                    res = send_signed_rpc("http://127.0.0.1:8080/gateway/v1/rpc", "hermes.board.sync", body)
+                    res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.board.sync", body)
                     self._send_json(res)
                 else:
                     rpc_res = execute_gateway_rpc("hermes.board.sync", body)
