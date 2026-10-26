@@ -11,8 +11,8 @@ from unittest.mock import patch
 import urllib.error
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, r"C:\Users\alesh\jev-workspace\delivery-offline")
+sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
 import inference_adapter as adapter
 from data_contracts import FailureEvent

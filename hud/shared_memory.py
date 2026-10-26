@@ -419,6 +419,15 @@ class SharedMemoryStore:
                     f_bb.write_text(blackboard_md, encoding="utf-8")
 
                     written_files.extend([str(f_state), str(f_tasks), str(f_bb)])
+
+                    try:
+                        from hud.obsidian_root_generator import generate_aios_obsidian_vault
+                        gen_res = generate_aios_obsidian_vault(vault_dir)
+                        for wf in gen_res.get("written_files", []):
+                            if wf not in written_files:
+                                written_files.append(wf)
+                    except Exception as gen_exc:
+                        logger.warning(f"AIOS root vault generator error: {gen_exc}")
                 except Exception as exc:
                     err_msg = f"Failed to sync vault to {vault_dir}: {exc}"
                     logger.warning(err_msg)
@@ -524,11 +533,14 @@ class SharedMemoryStore:
         lines.extend([
             "## 4. Cross-Agent Context & Knowledge Links",
             "",
+            "- [[00_AIOS_ROOT]]: Ring-0 Operating System Core & Sub-Agent Roster",
+            "- [[03_AIOS_ASSIGNMENTS]]: Dynamic Assignment Routing & Trigger Mapping (Kanban + Ledger + Educate)",
             "- [[core]]: AI OS Ring-0 Foundation and Anti-Gravity Core",
             "- [[modules/knowledge-memory]]: Long-Term Memory, Obsidian Integration & Vector Indexing",
             "- [[modules/execution]]: Execution Engines, Safe Sandboxes & Job Ledgers",
             "- [[modules/hermes-delegation]]: Hermes RPC Protocol, HMAC Signatures & Local Model Execution",
             "- [[modules/source-governance]]: Strict Data Invariants, Penny Fraction Checks & Quarantine Policies",
+            "- Sub-Agents: [[agents/JEV-PowerShell-Patcher]], [[agents/cron]], [[agents/maintain-daemon]], [[agents/meta-diode-relay]], [[agents/hermes-sub-agents]]",
             "",
             "---",
             "*Document automatically maintained by AIOS Shared Short-Term Memory Synchronizer.*"

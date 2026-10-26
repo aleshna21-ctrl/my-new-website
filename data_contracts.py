@@ -144,3 +144,127 @@ class GatewayStatusPayload(BaseModel):
     replay_cache_size: int
     timestamp_utc: str
 
+
+# ============================================================================ #
+# Real-Time Visualization Skill & SQLite Ledger Contracts
+# ============================================================================ #
+
+class StreamingSeriesPoint(BaseModel):
+    ts: str
+    time_epoch: float
+    credits_remaining: int
+    credits_consumed: int
+    burn_rate: float
+    rtt_ms: float
+    jobs_active: int
+    jobs_completed: int
+    throughput_ops_sec: float
+
+
+class StreamingSeriesResponse(BaseModel):
+    status: str = "ok"
+    series: List[StreamingSeriesPoint]
+    buffer_size: int = 60
+    window_seconds: int = 60
+    trace_id: Optional[str] = None
+
+
+class DAGNode(BaseModel):
+    id: str
+    name: str
+    type: str
+    layer: int
+    status: Optional[str] = "active"
+    scope: Optional[str] = None
+    job_id: Optional[str] = None
+    state: Optional[str] = None
+    attempts: Optional[int] = 0
+    updated_at: Optional[str] = ""
+
+
+class DAGLink(BaseModel):
+    source: str
+    target: str
+    kind: str = "flow"
+
+
+class DAGLayerInfo(BaseModel):
+    layer: int
+    name: str
+    tier: str
+
+
+class HierarchySummary(BaseModel):
+    total_nodes: int
+    total_links: int
+    jobs_count: int
+    scopes_count: int
+    quarantined_count: int = 0
+
+
+class CortexHierarchyPayload(BaseModel):
+    nodes: List[DAGNode]
+    links: List[DAGLink]
+    layers: List[DAGLayerInfo]
+    summary: HierarchySummary
+    trace_id: Optional[str] = None
+
+
+class SQLiteTableSummary(BaseModel):
+    row_count: int
+    columns: Optional[List[str]] = None
+
+
+class SQLiteJobRecord(BaseModel):
+    job_id: str
+    scope_id: Optional[str] = None
+    job_type: Optional[str] = None
+    state: str
+    attempt_count: int = 0
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class SQLiteLedgerPayload(BaseModel):
+    db_path: str
+    tables: dict[str, Any]
+    jobs: List[SQLiteJobRecord]
+    terminal_events: List[dict] = Field(default_factory=list)
+    total_jobs: int
+    mode: str = "ro"
+    timestamp_utc: str
+    trace_id: Optional[str] = None
+
+
+# ============================================================================ #
+# Encore Observability & Tracing Contracts
+# ============================================================================ #
+
+class EncoreSpanRecord(BaseModel):
+    trace_id: str
+    span_id: str
+    parent_span_id: Optional[str] = None
+    service: str
+    name: str
+    method: str
+    start_time: float
+    duration_ms: float
+    status_code: int
+    attributes: dict[str, Any] = Field(default_factory=dict)
+
+
+class EncoreObservabilityMetrics(BaseModel):
+    service_name: str = "aios-hud-server"
+    encore_framework_version: str = "1.58.8"
+    uptime_seconds: float
+    total_requests: int
+    active_spans: int
+    avg_latency_ms: float
+    p95_latency_ms: float
+    p99_latency_ms: float
+    error_count: int
+    error_rate_percent: float
+    recent_traces_count: int
+    timestamp_utc: str
+
+

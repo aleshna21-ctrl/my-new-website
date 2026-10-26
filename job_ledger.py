@@ -24,8 +24,10 @@ OUTBOX_FILE = r"C:\Users\alesh\jev-workspace\notification-outbox\metadata_outbox
 if not os.path.isfile(OUTBOX_FILE):
     OUTBOX_FILE = str(BASE_DIR / "data" / "metadata_outbox.json")
 
-# Strict State Machine Transition Graph (Module 11)
+# Strict State Machine Transition Graph (Module 11 + Dynamic Inbox Intake)
 VALID_TRANSITIONS: Dict[str, Set[str]] = {
+    "[ INBOX ]": {"queued", "running", "validated", "quarantined"},
+    "inbox": {"queued", "running", "validated", "quarantined"},
     "queued": {"running", "quarantined"},
     "running": {"validated", "quarantined"},
     "validated": {"approved", "completed", "quarantined"},
@@ -87,7 +89,94 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS agent_states (
+                agent_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                state TEXT NOT NULL,
+                last_heartbeat TEXT NOT NULL,
+                capabilities TEXT,
+                meta TEXT
+            )
+        """)
         conn.commit()
+
+def inject_inbox_job(job_id: str, scope_id: str, job_type: str, state: str = "[ INBOX ]") -> bool:
+    """Injects an intake payload into the [ INBOX ] state of the ledger assigned to an agent."""
+    init_db()
+    now = utc_now_iso()
+    with sqlite3.connect(DB_FILE, isolation_level=None) as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        try:
+            cursor.execute("""
+                INSERT OR REPLACE INTO jobs (job_id, scope_id, job_type, state, attempt_count, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 0, ?, ?)
+            """, (job_id, scope_id, job_type, state, now, now))
+            success = (cursor.rowcount >= 1)
+            conn.execute("COMMIT")
+            return success
+        except Exception:
+            conn.execute("ROLLBACK")
+            return False
+
+def register_agent_state(
+    agent_id: str,
+    name: str,
+    role: str,
+    state: str = "active",
+    capabilities: Optional[list] = None,
+    meta: Optional[dict] = None
+) -> bool:
+    """Dynamically populates or updates active agent operational states in job_ledger.db."""
+    init_db()
+    now = utc_now_iso()
+    with sqlite3.connect(DB_FILE, isolation_level=None) as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        try:
+            cursor.execute("""
+                INSERT OR REPLACE INTO agent_states (agent_id, name, role, state, last_heartbeat, capabilities, meta)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                agent_id,
+                name,
+                role,
+                state,
+                now,
+                json.dumps(capabilities or []),
+                json.dumps(meta or {})
+            ))
+            conn.execute("COMMIT")
+            return True
+        except Exception:
+            conn.execute("ROLLBACK")
+            return False
+
+def get_active_agent_states() -> list:
+    """Retrieves all dynamically registered agent states from job_ledger.db."""
+    init_db()
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='agent_states'")
+        if not cur.fetchone():
+            return []
+        cur.execute("SELECT * FROM agent_states ORDER BY last_heartbeat DESC")
+        results = []
+        for row in cur.fetchall():
+            d = dict(row)
+            try:
+                d["capabilities"] = json.loads(d.get("capabilities") or "[]")
+            except Exception:
+                d["capabilities"] = []
+            try:
+                d["meta"] = json.loads(d.get("meta") or "{}")
+            except Exception:
+                d["meta"] = {}
+            results.append(d)
+        return results
 
 def queue_job(job_id: str, scope_id: str, job_type: str) -> bool:
     init_db()

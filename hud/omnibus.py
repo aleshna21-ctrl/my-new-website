@@ -171,6 +171,17 @@ def get_second_brain_graph() -> dict[str, Any]:
     """
     nodes: list[dict[str, Any]] = [
         {
+            "id": "aios-root",
+            "label": "AIOS Root Node",
+            "ring": 0,
+            "group": "core",
+            "status": "active",
+            "path": "c:/Users/alesh/jev-workspace/hud-interface/vault/00_AIOS_ROOT.md",
+            "tags": ["core", "aios", "root-node", "ring-0"],
+            "summary": "Ring 0 Operating System Nucleus: Primary coordinator and direct wiring hub for all 5 execution agent clusters.",
+            "requires": ["core.md"],
+        },
+        {
             "id": "core.md",
             "label": "Second Brain Core",
             "ring": 0,
@@ -181,7 +192,18 @@ def get_second_brain_graph() -> dict[str, Any]:
             "summary": "Shared base instructions: 4-part structure, explicit module activation states (shared, conditional, disabled), source precedence.",
             "requires": [],
         },
-        # Ring 1: Second Brain Modules
+        # Ring 1: Second Brain Modules & AIOS Dynamic Routing
+        {
+            "id": "assignments",
+            "label": "Assignments & Routing",
+            "ring": 1,
+            "group": "aios",
+            "status": "active",
+            "path": "c:/Users/alesh/jev-workspace/hud-interface/vault/03_AIOS_ASSIGNMENTS.md",
+            "tags": ["assignments", "orchestrator", "routing", "ledger"],
+            "summary": "Dynamic assignment routing linking Kanban orchestrator, SQLite ledger, and educate. Accepts aios-directed, operator-directed, and event-driven triggers.",
+            "requires": ["aios-root", "core.md", "execution", "knowledge-memory"],
+        },
         {
             "id": "source-governance",
             "label": "Source Governance",

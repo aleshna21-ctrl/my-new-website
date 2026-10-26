@@ -650,6 +650,12 @@ FLOW_EDGES = [
     ("brain", "jev", "policy"),
     ("mark", "jev", "tool calls"),
     ("jev", "hud", "verdicts"),
+    ("hud", "assignments", "operator-directed"),
+    ("jev", "assignments", "aios-directed"),
+    ("inbox", "assignments", "event-driven"),
+    ("brain", "assignments", "educate & memory"),
+    ("assignments", "harness", "ledger state"),
+    ("assignments", "hermes", "model handoff"),
     ("hud", "hermes", "probe"),
     ("hermes", "model", "loopback :8080"),
     ("hermes", "harness", "schema extract"),
@@ -664,9 +670,15 @@ FLOW_EDGES = [
 
 
 OBSIDIAN_NOTES = [
-    {"id": "core.md", "label": "core.md", "ring": 0, "group": "core", "doc_id": "sb-core",
+    {"id": "aios-root", "label": "AIOS Root Node", "ring": 0, "group": "core", "doc_id": "aios-root",
+     "flow_node": "hud", "base_activity": 99,
+     "summary": "Ring 0 AIOS Root Node: Primary system nucleus wiring all 5 active agent clusters directly."},
+    {"id": "assignments", "label": "Assignments & Routing", "ring": 1, "group": "aios", "doc_id": "aios-assignments",
+     "flow_node": "assignments", "base_activity": 95,
+     "summary": "Dynamic assignment routing linking Kanban orchestrator, SQLite ledger, and educate. Accepts aios-directed, operator-directed, and event-driven triggers."},
+    {"id": "core.md", "label": "core.md", "ring": 1, "group": "core", "doc_id": "sb-core",
      "flow_node": "brain", "base_activity": 96,
-     "summary": "Ring 0 Nucleus: Master Second Brain instructions, module states (shared/conditional/disabled), and precedence."},
+     "summary": "Ring 1 Child Node: Master Second Brain instructions, module states, and precedence governed under AIOS Root."},
     {"id": "source-governance", "label": "Source Governance", "ring": 1, "group": "governance", "doc_id": "sb-source-gov",
      "flow_node": "brain", "base_activity": 88,
      "summary": "Owns chronology, provenance, conflict resolution, and protection of synced reference sources."},
@@ -719,7 +731,10 @@ OBSIDIAN_NOTES = [
 ]
 
 OBSIDIAN_LINKS = [
-    # Ring 0 -> Ring 1 core links
+    # Ring 0 AIOS Root & Ring 1 core links
+    ("aios-root", "core.md", 99, 5, "root-child"),
+    ("aios-root", "assignments", 98, 5, "root-routing"),
+    ("aios-root", "project-index", 97, 5, "root-anchor"),
     ("core.md", "source-governance", 98, 5, "governance"),
     ("core.md", "knowledge-memory", 95, 4, "governance"),
     ("core.md", "verification", 97, 5, "verification"),
@@ -730,6 +745,12 @@ OBSIDIAN_LINKS = [
     ("core.md", "persona", 86, 3, "governance"),
     ("core.md", "project-index", 96, 5, "governance"),
     ("core.md", "budgeting", 22, 0, "disabled"),
+    # Assignments Dynamic Routing Links (Directly to Hermes Delegation & Execution Paths)
+    ("assignments", "hermes-delegation", 98, 5, "delegation"),
+    ("assignments", "execution", 96, 5, "execution"),
+    ("assignments", "reconcile-harness", 95, 5, "ledger-state"),
+    ("assignments", "sow-keystone", 93, 4, "data-flow"),
+    ("assignments", "knowledge-memory", 92, 4, "educate"),
     # Ring 1 cross-references (high connection strength)
     ("source-governance", "knowledge-memory", 89, 4, "governance"),
     ("source-governance", "project-index", 91, 4, "governance"),
@@ -778,7 +799,7 @@ _WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]")
 _MDLINK_RE = re.compile(r"\[[^\]]+\]\(([^)#\s]+\.md)\)")
 _SANITIZE_TELEMETRY_RE = re.compile(r"[@\$€£`*_~>\[\]]+")
 _SLUG_RE = re.compile(r"[^a-z0-9_-]+")
-_VALID_FLOW_NODES = {"hud", "jev", "mark", "brain", "hermes", "model", "inbox", "harness", "quarantine", "gtm", "notify", "relay"}
+_VALID_FLOW_NODES = {"hud", "jev", "mark", "brain", "hermes", "model", "inbox", "harness", "quarantine", "gtm", "notify", "relay", "assignments"}
 
 _VAULT_CACHE: dict[str, Any] = {"at": 0.0, "key": "", "value": None}
 
@@ -1309,6 +1330,10 @@ def compose_frame(*, hermes: dict, ledger: dict, gtm: dict, alerts_status: dict,
                    "detail": "zero-PII metadata", "hot": _hot(mtimes.get("notify"), now_ts)},
         "relay": {"group": "offline", "label": "SMTP Relay", "status": "idle", "metric": "manual trigger",
                   "detail": "STARTTLS, human-initiated"},
+        "assignments": {"group": "aios", "label": "Assignments & Routing", "status": "ok",
+                        "metric": f"{len(board.get('tasks', []))} tasks · 3 triggers",
+                        "detail": "orchestrator + ledger + educate",
+                        "triggers": ["aios-directed", "operator-directed", "event-driven"]},
     }
     for node in nodes.values():
         node.setdefault("hot", False)

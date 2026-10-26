@@ -19,8 +19,9 @@ build/
 dist/
 *.egg-info/
 
-# Node.js
+# Node.js & Encore
 node_modules/
+.encore/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -32,6 +33,11 @@ inbox/*
 *.log
 *.pid
 *.lock
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+data/job_ledger.db
 inference_telemetry.json
 
 # OS & IDE

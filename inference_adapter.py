@@ -50,7 +50,8 @@ DEFAULT_MODEL = "qwen3:4b"
 class LiveLocalModelAdapter:
     def __init__(self, endpoint=None,
                  model_tag=None, max_retries=1, max_tokens=2048,
-                 allow_simulation=False, timeout=45, model_name=None):
+                 allow_simulation=False, timeout=45, model_name=None,
+                 keep_alive=-1):
         if endpoint is None:
             endpoint = os.environ.get("HERMES_ENDPOINT", DEFAULT_ENDPOINT)
         url = urllib.parse.urlsplit(endpoint)
@@ -76,6 +77,7 @@ class LiveLocalModelAdapter:
         self.max_tokens = max_tokens
         self.allow_simulation = allow_simulation
         self.timeout = timeout
+        self.keep_alive = keep_alive
         self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         self._usage = {}
         self._finish_reason = None
@@ -105,6 +107,7 @@ class LiveLocalModelAdapter:
             "max_tokens": self.max_tokens,
             "stream": False,
             "response_format": {"type": "json_object"},
+            "keep_alive": self.keep_alive,
         }
         request = urllib.request.Request(self.endpoint, data=json.dumps(payload).encode("utf-8"),
                                         headers={"Content-Type": "application/json", "User-Agent": "JEV-Inference-Adapter"}, method="POST")

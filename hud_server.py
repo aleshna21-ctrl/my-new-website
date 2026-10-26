@@ -15,6 +15,15 @@ import time
 import uuid
 from urllib.parse import parse_qs, urlparse
 
+from hud.type_safe_router import (
+    GLOBAL_OBSERVABILITY, RealTimeVisualizationEngine, TypeSafeRouter
+)
+from data_contracts import (
+    StreamingSeriesResponse, CortexHierarchyPayload, SQLiteLedgerPayload,
+    EncoreObservabilityMetrics
+)
+
+
 PROBE_LOCK = threading.Lock()
 BUILD_ID = 'strict-probe-aligned-v1'
 SERVER_STARTED = time.time()
@@ -29,9 +38,11 @@ OFFLINE_DIR = os.path.join(ROOT_DIR, "delivery-offline")
 GTM_DIR = os.path.join(ROOT_DIR, "gtm-research")
 OUTBOX_DIR = os.path.join(ROOT_DIR, "notification-outbox")
 
+if HUD_DIR not in sys.path or sys.path[0] != HUD_DIR:
+    sys.path.insert(0, HUD_DIR)
 for p in (OFFLINE_DIR, GTM_DIR):
     if p not in sys.path:
-        sys.path.insert(0, p)
+        sys.path.append(p)
 
 def _load_env_file(path: str):
     if not os.path.exists(path):
@@ -597,135 +608,16 @@ def get_cortex_automated_tasks() -> Dict[str, Any]:
         "tasks": auto_tasks
     }
 
-def get_sqlite_ledger_data() -> Dict[str, Any]:
+VISUALIZATION_ENGINE = RealTimeVisualizationEngine(db_path_resolver=lambda: get_db_path())
+TYPE_SAFE_ROUTER = TypeSafeRouter(observability=GLOBAL_OBSERVABILITY)
+
+def get_sqlite_ledger_data(trace_id: Optional[str] = None) -> Dict[str, Any]:
     """Reads raw and aggregated data from SQLite job_ledger.db across tables in read-only mode."""
-    db_path = get_db_path()
-    if not os.path.exists(db_path):
-        return {"error": "SQLite ledger database not found", "tables": {}, "jobs": []}
+    return VISUALIZATION_ENGINE.get_sqlite_ledger(trace_id=trace_id).model_dump()
 
-    tables_summary = {}
-    recent_jobs = []
-    terminal_events = []
-
-    try:
-        with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0) as conn:
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-
-            # 1. Table inventory
-            cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            table_names = [r["name"] for r in cur.fetchall()]
-            for tbl in table_names:
-                try:
-                    c = conn.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
-                    tables_summary[tbl] = {"row_count": c}
-                except Exception:
-                    tables_summary[tbl] = {"row_count": 0}
-
-            # 2. Detailed jobs
-            if "jobs" in table_names:
-                cur.execute("SELECT job_id, scope_id, job_type, state, attempt_count, created_at, updated_at FROM jobs ORDER BY updated_at DESC LIMIT 50")
-                for r in cur.fetchall():
-                    recent_jobs.append(dict(r))
-
-            # 3. Terminal events
-            if "hud_terminal_events" in table_names:
-                cur.execute("SELECT * FROM hud_terminal_events ORDER BY rowid DESC LIMIT 20")
-                for r in cur.fetchall():
-                    terminal_events.append(dict(r))
-    except Exception as exc:
-        return {"error": str(exc), "tables": {}, "jobs": []}
-
-    return {
-        "db_path": db_path,
-        "tables": tables_summary,
-        "jobs": recent_jobs,
-        "terminal_events": terminal_events,
-        "total_jobs": len(recent_jobs),
-        "timestamp_utc": datetime.now(timezone.utc).isoformat()
-    }
-
-def get_cortex_hierarchy() -> Dict[str, Any]:
-    """
-    Builds a multi-level DAG hierarchy graph from AIOS Governance -> Scopes -> SQLite Jobs -> Diodes.
-    Format is optimized for hierarchical tree/DAG rendering in SVG/Canvas.
-    """
-    ledger = get_sqlite_ledger_data()
-    jobs = ledger.get("jobs", [])
-
-    # Tier 1: Root Governance
-    nodes = [
-        {"id": "tier1-aios", "name": "AI OS Governance Core", "type": "root", "layer": 1, "status": "active"},
-        {"id": "tier1-ledger", "name": "Module 11 SQLite Ledger", "type": "root", "layer": 1, "status": "active"},
-        {"id": "tier1-hermes", "name": "Hermes Runtime (:8080)", "type": "root", "layer": 1, "status": "active"}
-    ]
-    links = [
-        {"source": "tier1-aios", "target": "tier1-ledger"},
-        {"source": "tier1-aios", "target": "tier1-hermes"}
-    ]
-
-    # Tier 2: Scopes
-    scopes = set()
-    for j in jobs:
-        sc = j.get("scope_id") or "default-scope"
-        scopes.add(sc)
-
-    for sc in sorted(scopes):
-        sc_id = f"scope-{sc}"
-        nodes.append({"id": sc_id, "name": f"Scope: {sc}", "type": "scope", "layer": 2, "scope": sc, "status": "active"})
-        links.append({"source": "tier1-ledger", "target": sc_id})
-
-    # Tier 3: Jobs
-    for j in jobs:
-        jid = j.get("job_id")
-        sc = j.get("scope_id") or "default-scope"
-        st = j.get("state", "queued")
-        node_id = f"job-{jid}"
-        nodes.append({
-            "id": node_id,
-            "name": f"{j.get('job_type', 'job')}: {jid}",
-            "job_id": jid,
-            "type": "job",
-            "layer": 3,
-            "scope": sc,
-            "state": st,
-            "attempts": j.get("attempt_count", 0),
-            "updated_at": j.get("updated_at", "")
-        })
-        links.append({"source": f"scope-{sc}", "target": node_id})
-
-    # Tier 4: Terminal Events
-    events = ledger.get("terminal_events", [])
-    for ev in events[:10]:
-        eid = ev.get("event_id") or f"ev-{ev.get('job_id', 'unknown')}"
-        node_id = f"event-{eid}"
-        nodes.append({
-            "id": node_id,
-            "name": f"Diode Event {eid}",
-            "type": "diode",
-            "layer": 4,
-            "status": "sealed"
-        })
-        parent_job = f"job-{ev.get('job_id', '')}"
-        if any(n["id"] == parent_job for n in nodes):
-            links.append({"source": parent_job, "target": node_id})
-
-    return {
-        "nodes": nodes,
-        "links": links,
-        "layers": [
-            {"layer": 1, "name": "Governance Core"},
-            {"layer": 2, "name": "Execution Scopes"},
-            {"layer": 3, "name": "SQLite Jobs"},
-            {"layer": 4, "name": "Terminal Diodes"}
-        ],
-        "summary": {
-            "total_nodes": len(nodes),
-            "total_links": len(links),
-            "jobs_count": len(jobs),
-            "scopes_count": len(scopes)
-        }
-    }
+def get_cortex_hierarchy(trace_id: Optional[str] = None) -> Dict[str, Any]:
+    """Builds a multi-level DAG hierarchy graph (Tiers 1-4) from SQLite ledger and AIOS governance."""
+    return VISUALIZATION_ENGINE.generate_dag_hierarchy(trace_id=trace_id).model_dump()
 
 def record_cortex_streaming_point() -> Dict[str, Any]:
     """Appends a new time-series metric sample into the rolling streaming series."""
@@ -738,26 +630,77 @@ def record_cortex_streaming_point() -> Dict[str, Any]:
         jobs_active = sum(1 for j in db_data.get("jobs", []) if j.get("state") in ("queued", "running"))
         jobs_completed = sum(1 for j in db_data.get("jobs", []) if j.get("state") == "completed")
 
-        pt = {
-            "ts": time.strftime("%H:%M:%S", time.gmtime()),
-            "time_epoch": round(time.time(), 2),
-            "credits_remaining": credits_info.get("credits_remaining", 100000),
-            "credits_consumed": credits_info.get("credits_consumed", 0),
-            "burn_rate": credits_info.get("burn_rate_credits_per_min", 0.0),
-            "rtt_ms": fb.get("latest_rtt_ms", 0.0),
-            "jobs_active": jobs_active,
-            "jobs_completed": jobs_completed,
-            "throughput_ops_sec": round(fb.get("total_probes", 0) / max(1.0, (time.time() - _CORTEX_START_TIME)), 2)
-        }
-        _CORTEX_STREAMING_SERIES.append(pt)
-        return pt
+        pt = VISUALIZATION_ENGINE.record_streaming_point(
+            credits_remaining=credits_info.get("credits_remaining", 100000),
+            credits_consumed=credits_info.get("credits_consumed", 0),
+            burn_rate=credits_info.get("burn_rate_credits_per_min", 0.0),
+            rtt_ms=fb.get("latest_rtt_ms", 0.0),
+            jobs_active=jobs_active,
+            jobs_completed=jobs_completed,
+            total_probes=fb.get("total_probes", 0)
+        )
+        return pt.model_dump()
 
-def get_cortex_streaming_series() -> List[Dict[str, Any]]:
+def get_cortex_streaming_series(trace_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """Returns the rolling 60-second time-series buffer for streaming charts."""
     with _CORTEX_LOCK:
-        if not _CORTEX_STREAMING_SERIES:
+        resp = VISUALIZATION_ENGINE.get_streaming_series(trace_id=trace_id)
+        if not resp.series:
             record_cortex_streaming_point()
-        return list(_CORTEX_STREAMING_SERIES)
+            resp = VISUALIZATION_ENGINE.get_streaming_series(trace_id=trace_id)
+        return [pt.model_dump() for pt in resp.series]
+
+# Register Type-Safe Routes for Real-Time Visualization, Ledger & Observability
+TYPE_SAFE_ROUTER.register(
+    "/api/cortex/streaming-series", "GET",
+    lambda trace_id=None, **_: StreamingSeriesResponse(
+        status="ok",
+        series=get_cortex_streaming_series(trace_id=trace_id),
+        buffer_size=len(get_cortex_streaming_series(trace_id=trace_id)),
+        window_seconds=60,
+        trace_id=trace_id
+    ),
+    response_model=StreamingSeriesResponse,
+    service="aios-visualization"
+)
+TYPE_SAFE_ROUTER.register(
+    "/api/cortex/hierarchy", "GET",
+    lambda trace_id=None, **_: VISUALIZATION_ENGINE.generate_dag_hierarchy(trace_id=trace_id),
+    response_model=CortexHierarchyPayload,
+    service="aios-visualization"
+)
+TYPE_SAFE_ROUTER.register(
+    "/api/sqlite/ledger", "GET",
+    lambda trace_id=None, **_: VISUALIZATION_ENGINE.get_sqlite_ledger(trace_id=trace_id),
+    response_model=SQLiteLedgerPayload,
+    service="aios-ledger-diode"
+)
+TYPE_SAFE_ROUTER.register(
+    "/api/cortex/credits", "GET",
+    lambda **_: get_cortex_credits(),
+    service="aios-governance"
+)
+TYPE_SAFE_ROUTER.register(
+    "/api/cortex/tasks", "GET",
+    lambda **_: get_cortex_automated_tasks(),
+    service="aios-governance"
+)
+TYPE_SAFE_ROUTER.register(
+    "/api/observability/metrics", "GET",
+    lambda **_: GLOBAL_OBSERVABILITY.get_metrics(),
+    response_model=EncoreObservabilityMetrics,
+    service="aios-observability"
+)
+TYPE_SAFE_ROUTER.register(
+    "/api/observability/traces", "GET",
+    lambda **_: {"status": "ok", "traces": GLOBAL_OBSERVABILITY.get_recent_spans()},
+    service="aios-observability"
+)
+TYPE_SAFE_ROUTER.register(
+    "/api/observability/health", "GET",
+    lambda **_: {"status": "healthy", "service": "aios-hud-server", "framework": "encore", "version": "1.58.8"},
+    service="aios-observability"
+)
 
 # --------------------------------------------------------------------------- #
 # AI OS dashboard: telemetry frame + board helpers (logic lives in hud/os_dashboard.py)
@@ -850,6 +793,7 @@ def os_frame() -> dict:
         "tasks": get_cortex_automated_tasks(),
         "latest_stream_point": st_pt
     }
+    frame["observability"] = GLOBAL_OBSERVABILITY.get_metrics().model_dump()
     try:
         from hud.shared_memory import get_shared_memory_store
         frame["memory"] = get_shared_memory_store().get_state_summary()
@@ -1115,12 +1059,34 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache, no-transform, no-store")
         self.send_header("X-Accel-Buffering", "no")
         self.send_header("Content-Security-Policy", "default-src 'self' 'unsafe-inline'")
+        trace_id = GLOBAL_OBSERVABILITY.generate_trace_id()
+        span_id = GLOBAL_OBSERVABILITY.generate_span_id()
+        self.send_header("X-Encore-Trace-ID", trace_id)
+        self.send_header("X-Encore-Span-ID", span_id)
+        self.send_header("traceparent", GLOBAL_OBSERVABILITY.build_traceparent(trace_id, span_id))
+        self.send_header("X-Encore-Service", "aios-hud-server")
         if ack_id:
             self.send_header("X-Gateway-Ack", str(ack_id))
         if seq_id is not None:
             self.send_header("X-Gateway-Seq", str(seq_id))
         if rtt_ms is not None:
             self.send_header("X-Gateway-RTT", str(rtt_ms))
+        self.end_headers()
+        self.wfile.write(raw)
+        self.wfile.flush()
+
+    def _send_type_safe_json(self, data: dict, status: int = 200, headers: dict | None = None):
+        raw = json.dumps(data).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(raw)))
+        self.send_header("Cache-Control", "no-cache, no-transform, no-store")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("Content-Security-Policy", "default-src 'self' 'unsafe-inline'")
+        if headers:
+            for k, v in headers.items():
+                if k.lower() not in ("content-type", "content-length", "cache-control", "x-accel-buffering", "content-security-policy"):
+                    self.send_header(k, str(v))
         self.end_headers()
         self.wfile.write(raw)
         self.wfile.flush()
@@ -1262,6 +1228,10 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path, _, raw_query = self.path.partition("?")
+        if (path, "GET") in TYPE_SAFE_ROUTER._routes or path.startswith("/api/observability/"):
+            res, status_code, extra_headers = TYPE_SAFE_ROUTER.dispatch(path, "GET", dict(self.headers), query=parse_qs(raw_query))
+            self._send_type_safe_json(res, status_code, extra_headers)
+            return
         if path.startswith("/api/os/"):
             self._handle_os_get(path, parse_qs(raw_query))
             return
@@ -1421,6 +1391,11 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                 raise ValueError("Request body must be a JSON object.")
         except (ValueError, UnicodeError) as exc:
             self._send_json({"error": str(exc)}, 400)
+            return
+
+        if (self.path, "POST") in TYPE_SAFE_ROUTER._routes:
+            res, status_code, extra_headers = TYPE_SAFE_ROUTER.dispatch(self.path, "POST", dict(self.headers), body=body)
+            self._send_type_safe_json(res, status_code, extra_headers)
             return
 
         if self.path.startswith("/api/os/"):

@@ -8,6 +8,16 @@
     "cockpit": "python app.py",
     "model": "python hermes_8080_server.py",
     "model:8080": "python hermes_8080_server.py",
-    "test": "python -m unittest discover tests"
+    "test": "python -m unittest discover tests",
+    "encore:dev": "encore run --port=4000 --browser=never",
+    "encore:check": "encore check",
+    "encore:gen": "encore gen client"
+  },
+  "dependencies": {
+    "encore.dev": "^1.58.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^7.0.2"
   }
 }

@@ -230,7 +230,16 @@ class HermesModelHandler(http.server.BaseHTTPRequestHandler):
 
         if path.startswith("/v1/chat/completions"):
             upstream_url = f"{UPSTREAM_BASE}/v1/chat/completions"
-            req = urllib.request.Request(upstream_url, data=raw_body, method="POST")
+            forward_body = raw_body
+            try:
+                data = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+                if isinstance(data, dict):
+                    if "keep_alive" not in data or data["keep_alive"] is None:
+                        data["keep_alive"] = -1
+                    forward_body = json.dumps(data).encode("utf-8")
+            except Exception:
+                forward_body = raw_body
+            req = urllib.request.Request(upstream_url, data=forward_body, method="POST")
             req.add_header("Content-Type", "application/json")
             try:
                 with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=60.0) as resp:
