@@ -55,9 +55,9 @@ TARGET_DIR = get_default_target_dir()
 DB_FILE = get_default_db_path()
 OUTBOX_FILE = get_default_outbox_path()
 
-# Strict State Machine Transition Graph (Module 11 + Dynamic Inbox Intake + HOTL Ejection)
+# Strict State Machine Transition Graph (Module 11 + Dynamic Inbox Intake + HOTL Ejection + Multi-Agent Matrix)
 VALID_TRANSITIONS: Dict[str, Set[str]] = {
-    "[ INBOX ]": {"queued", "running", "validated", "quarantined", "[ DONE ]", "[ STAGED / REVIEW ]", "[ NEEDS_REVIEW ]"},
+    "[ INBOX ]": {"queued", "running", "validated", "quarantined", "[ DONE ]", "[ STAGED / REVIEW ]", "[ NEEDS_REVIEW ]", "[ ACTIVE_ENFORCER ]", "[ ACTIVE_ARCHITECT ]", "[ ACTIVE_WARDEN ]", "[ ACTIVE_FABRICATOR ]"},
     "inbox": {"queued", "running", "validated", "quarantined", "[ DONE ]", "[ STAGED / REVIEW ]", "[ NEEDS_REVIEW ]"},
     "queued": {"running", "quarantined", "[ NEEDS_REVIEW ]"},
     "running": {"validated", "quarantined", "[ DONE ]", "[ NEEDS_REVIEW ]"},
@@ -66,8 +66,25 @@ VALID_TRANSITIONS: Dict[str, Set[str]] = {
     "completed": set(),
     "[ DONE ]": set(),
     "[ STAGED / REVIEW ]": {"[ DONE ]", "[ NEEDS_REVIEW ]", "approved", "completed"},
-    "[ NEEDS_REVIEW ]": {"queued", "running", "[ INBOX ]", "[ DONE ]", "quarantined", "approved"},
-    "quarantined": {"queued"}
+    "[ NEEDS_REVIEW ]": {"queued", "running", "[ INBOX ]", "[ DONE ]", "quarantined", "approved", "[ NEW_PAYLOAD ]"},
+    "quarantined": {"queued"},
+    # Multi-Agent Matrix states
+    "[ NEW_PAYLOAD ]": {"[ ACTIVE_ENFORCER ]", "quarantined", "[ NEEDS_REVIEW ]"},
+    "[ ACTIVE_ENFORCER ]": {"[ PAYLOAD_CLEAN ]", "[ DRAFT_VERIFIED ]", "[ NEW_PAYLOAD ]", "[ DRAFT_READY ]", "[ NEEDS_REVIEW ]", "quarantined"},
+    "[ PAYLOAD_CLEAN ]": {"[ ACTIVE_EXTRACTOR ]", "quarantined", "[ NEEDS_REVIEW ]"},
+    "[ ACTIVE_EXTRACTOR ]": {"[ SYNTHESIS_PENDING ]", "[ PAYLOAD_CLEAN ]", "[ NEEDS_REVIEW ]", "quarantined"},
+    "[ SYNTHESIS_PENDING ]": {"[ ACTIVE_SYNTHESIZER ]", "quarantined", "[ NEEDS_REVIEW ]"},
+    "[ EXTRACTED ]": {"[ ACTIVE_SYNTHESIZER ]", "quarantined", "[ NEEDS_REVIEW ]"},
+    "[ ACTIVE_SYNTHESIZER ]": {"[ NEEDS_CODE ]", "[ NEEDS_CONTENT ]", "[ SYNTHESIS_PENDING ]", "[ NEEDS_REVIEW ]", "quarantined"},
+    "[ NEEDS_CODE ]": {"[ ACTIVE_SYSTEMS_ENGINEER ]", "quarantined", "[ NEEDS_REVIEW ]"},
+    "[ ACTIVE_SYSTEMS_ENGINEER ]": {"[ BLUEPRINT_READY ]", "[ NEEDS_CODE ]", "[ NEEDS_REVIEW ]", "quarantined"},
+    "[ BLUEPRINT_READY ]": {"[ ACTIVE_FABRICATOR ]", "quarantined", "[ NEEDS_REVIEW ]"},
+    "[ ACTIVE_FABRICATOR ]": {"[ DONE ]", "[ BLUEPRINT_READY ]", "[ NEEDS_CODE ]", "[ NEEDS_REVIEW ]", "quarantined"},
+    "[ NEEDS_CONTENT ]": {"[ ACTIVE_DRAFTER ]", "quarantined", "[ NEEDS_REVIEW ]"},
+    "[ ACTIVE_DRAFTER ]": {"[ DRAFT_READY ]", "[ NEEDS_CONTENT ]", "[ NEEDS_REVIEW ]", "quarantined"},
+    "[ DRAFT_READY ]": {"[ ACTIVE_ENFORCER ]", "quarantined", "[ NEEDS_REVIEW ]"},
+    "[ DRAFT_VERIFIED ]": {"[ ACTIVE_DISPATCHER ]", "quarantined", "[ NEEDS_REVIEW ]"},
+    "[ ACTIVE_DISPATCHER ]": {"[ DONE ]", "[ DRAFT_VERIFIED ]", "[ NEEDS_REVIEW ]", "quarantined"},
 }
 
 NOTIFY_STATES: Set[str] = {"validated", "approved", "completed", "quarantined", "[ NEEDS_REVIEW ]"}

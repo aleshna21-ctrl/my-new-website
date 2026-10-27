@@ -28,3 +28,8 @@ _Avoid_: LLM client, model wrapper, AI service
 The one-way sanitized outbox export emitting opaque state transition events to notification observers without leaking sensitive payloads or client context.
 _Avoid_: Event emitter, message bus, webhook
 
+**Async Orchestrator**:
+The autonomous background orchestration engine executing multi-agent matrix pipelines, sandbox execution jails, and stalled lock recovery via the Job Ledger.
+_Avoid_: Task scheduler, cron worker, runner daemon
+
+

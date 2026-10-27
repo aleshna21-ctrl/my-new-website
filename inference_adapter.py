@@ -636,6 +636,8 @@ class FakeHermesAdapter:
         return res.raw_content
 
 
+HermesAdapter = LiveLocalModelAdapter
+
 _DEFAULT_ADAPTER: Optional[LiveLocalModelAdapter] = None
 
 
