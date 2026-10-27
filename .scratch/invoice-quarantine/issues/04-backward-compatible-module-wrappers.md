@@ -4,9 +4,9 @@
 
 **Blocked by:** 02: Atomic Fixture Repair, Auto-Recovery & Baseline Reset
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] `get_default_quarantine()` provides a thread-safe singleton
-- [ ] Top-level module functions (`get_quarantine_data`, `repair_quarantine_row`, `reset_quarantine_fixture`, `get_adversarial_csv_path`) delegate to `get_default_quarantine()`
-- [ ] Supports `reset_default_quarantine()` for test isolation
-- [ ] Existing callers can import top-level functions without code changes
+- [x] `get_default_quarantine()` provides a thread-safe singleton
+- [x] Top-level module functions (`get_quarantine_data`, `repair_quarantine_row`, `reset_quarantine_fixture`, `get_adversarial_csv_path`) delegate to `get_default_quarantine()`
+- [x] Supports `reset_default_quarantine()` for test isolation
+- [x] Existing callers can import top-level functions without code changes

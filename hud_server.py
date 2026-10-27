@@ -15,6 +15,7 @@ import time
 import uuid
 from urllib.parse import parse_qs, urlparse
 
+import invoice_quarantine
 from hud.type_safe_router import (
     GLOBAL_OBSERVABILITY, RealTimeVisualizationEngine, TypeSafeRouter
 )
@@ -162,241 +163,32 @@ def get_adversarial_csv_path() -> str:
 
 def get_quarantine_data() -> dict:
     csv_path = get_adversarial_csv_path()
-    rows = []
-    metrics = {"received": 0, "accepted": 0, "quarantined": 0, "duplicates": 0}
-    seen = set()
-    quarantined_samples = []
+    return invoice_quarantine.get_quarantine_data(csv_path=csv_path)
 
-    if os.path.exists(csv_path):
-        with open(csv_path, "r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            fieldnames = [name.strip() if name else name for name in (reader.fieldnames or [])]
-            for idx, raw_row in enumerate(reader, start=1):
-                clean_row = {k.strip(): (v or "").strip() for k, v in raw_row.items() if k}
-                metrics["received"] += 1
-                inv_id = clean_row.get("InvoiceID", "")
-                amt_str = clean_row.get("Amount", "")
-                dt_str = clean_row.get("Date", "")
-                is_dup = inv_id in seen
-                is_malformed = False
-                reason = None
-                status = "accepted"
 
-                if is_dup:
-                    metrics["duplicates"] += 1
-                    status = "duplicate"
-                    reason = f"Duplicate InvoiceID ({inv_id})"
-                elif not inv_id:
-                    metrics["quarantined"] += 1
-                    status = "quarantined"
-                    is_malformed = True
-                    reason = "Missing InvoiceID"
-                elif not amt_str:
-                    metrics["quarantined"] += 1
-                    status = "quarantined"
-                    is_malformed = True
-                    reason = "Missing Amount"
-                elif amt_str.startswith("-"):
-                    metrics["quarantined"] += 1
-                    status = "quarantined"
-                    is_malformed = True
-                    reason = f"Negative StrictStr amount ({amt_str})"
-                elif not amt_str.replace(".", "", 1).isdigit():
-                    metrics["quarantined"] += 1
-                    status = "quarantined"
-                    is_malformed = True
-                    reason = f"Non-numeric amount string ({amt_str})"
-                else:
-                    parts = amt_str.split(".")
-                    if len(parts) == 2 and len(parts[1]) > 2:
-                        metrics["quarantined"] += 1
-                        status = "quarantined"
-                        is_malformed = True
-                        reason = f"Sub-penny fractional precision ({amt_str}, {len(parts[1])} decimal places)"
-                    else:
-                        seen.add(inv_id)
-                        metrics["accepted"] += 1
-
-                row_dict = {
-                    "row_idx": idx,
-                    "row": idx,
-                    "invoice_id": inv_id or "MISSING",
-                    "amount": amt_str,
-                    "raw_amount": amt_str,
-                    "date": dt_str,
-                    "status": status,
-                    "is_malformed": is_malformed,
-                    "reason": reason
-                }
-                rows.append(row_dict)
-                if status == "quarantined":
-                    quarantined_samples.append(row_dict)
-
-    invariant_ok = (metrics["received"] == (metrics["accepted"] + metrics["quarantined"] + metrics["duplicates"]))
-    return {
-        "fixture": os.path.basename(csv_path),
-        "path": csv_path,
-        "metrics": metrics,
-        "invariant": {
-            "passed": invariant_ok,
-            "formula": f"{metrics['received']} == {metrics['accepted']} + {metrics['quarantined']} + {metrics['duplicates']}",
-            "metrics": metrics,
-            "quarantined_samples": quarantined_samples[:10]
-        },
-        "rows": rows
-    }
-
-def repair_quarantine_row(row_idx: int = 0, invoice_id: str = None, amount: str = None, date: str = None,
-                          auto_recover: bool = False, auto_recover_all: bool = False) -> dict:
+def repair_quarantine_row(
+    row_idx: int = 0,
+    invoice_id: str = None,
+    amount: str = None,
+    date: str = None,
+    auto_recover: bool = False,
+    auto_recover_all: bool = False
+) -> dict:
     csv_path = get_adversarial_csv_path()
-    if not os.path.exists(csv_path):
-        return {"error": f"Fixture file not found at {csv_path}", "status": "error"}
+    return invoice_quarantine.repair_quarantine_row(
+        row_idx=row_idx,
+        invoice_id=invoice_id,
+        amount=amount,
+        date=date,
+        auto_recover=auto_recover,
+        auto_recover_all=auto_recover_all,
+        csv_path=csv_path
+    )
 
-    orig_path = csv_path + ".original"
-    if not os.path.exists(orig_path):
-        try:
-            with open(csv_path, "r", encoding="utf-8-sig") as src, open(orig_path, "w", encoding="utf-8") as dst:
-                dst.write(src.read())
-        except Exception:
-            pass
-
-    with open(csv_path, "r", encoding="utf-8-sig") as f:
-        reader = list(csv.reader(f))
-
-    if not reader:
-        return {"error": "Empty CSV fixture", "status": "error"}
-
-    header = reader[0]
-    data_rows = reader[1:]
-    repaired_records = []
-
-    if auto_recover_all:
-        seen = set()
-        for idx, r in enumerate(data_rows, start=1):
-            if len(r) >= 2:
-                inv = r[0].strip()
-                amt = r[1].strip()
-                # Clean malformed/negative/sub-penny amount
-                if amt.startswith("-") or not amt.replace(".", "", 1).isdigit() or (len(amt.split(".")) == 2 and len(amt.split(".")[1]) > 2):
-                    cleaned_amt = amt.lstrip("-").strip()
-                    if cleaned_amt.replace(".", "", 1).isdigit():
-                        parts = cleaned_amt.split(".")
-                        if len(parts) == 2 and len(parts[1]) > 2:
-                            cleaned_amt = f"{parts[0]}.{parts[1][:2]}"
-                        elif len(parts) == 1:
-                            cleaned_amt = f"{parts[0]}.00"
-                        r[1] = cleaned_amt
-                        repaired_records.append({"row_idx": idx, "invoice_id": inv, "repaired_amount": cleaned_amt})
-                if inv in seen:
-                    fixed_inv = f"{inv}-REC"
-                    r[0] = fixed_inv
-                    repaired_records.append({"row_idx": idx, "repaired_invoice_id": fixed_inv})
-                else:
-                    seen.add(inv)
-    else:
-        if row_idx < 1 or row_idx > len(data_rows):
-            return {"error": f"Row index {row_idx} out of range (1..{len(data_rows)})", "status": "error"}
-
-        target_row = data_rows[row_idx - 1]
-        cur_inv = target_row[0].strip() if len(target_row) >= 1 else ""
-        cur_amt = target_row[1].strip() if len(target_row) >= 2 else ""
-
-        if auto_recover:
-            cleaned_amt = cur_amt.lstrip("-").strip()
-            if cleaned_amt.replace(".", "", 1).isdigit():
-                parts = cleaned_amt.split(".")
-                if len(parts) == 2 and len(parts[1]) > 2:
-                    cleaned_amt = f"{parts[0]}.{parts[1][:2]}"
-                elif len(parts) == 1:
-                    cleaned_amt = f"{parts[0]}.00"
-            else:
-                cleaned_amt = "0.00"
-            target_row[1] = cleaned_amt
-            repaired_records.append({"row_idx": row_idx, "invoice_id": cur_inv, "repaired_amount": cleaned_amt})
-        else:
-            if invoice_id is not None:
-                target_row[0] = str(invoice_id).strip()
-            if amount is not None:
-                amt_str = str(amount).strip()
-                if not amt_str.replace(".", "", 1).isdigit() or amt_str.startswith("-"):
-                    return {"error": f"Invalid StrictStr amount '{amt_str}'. Must be a positive decimal.", "status": "error"}
-                target_row[1] = amt_str
-            if date is not None and len(target_row) >= 3:
-                target_row[2] = str(date).strip()
-
-            repaired_records.append({
-                "row_idx": row_idx,
-                "invoice_id": target_row[0],
-                "amount": target_row[1],
-                "date": target_row[2] if len(target_row) >= 3 else ""
-            })
-
-    with open(csv_path, "w", encoding="utf-8", newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-        writer.writerows(data_rows)
-
-    other_path = os.path.join(HUD_DIR, "data", "adversarial_fixture.csv")
-    if os.path.abspath(other_path) != os.path.abspath(csv_path) and os.path.exists(other_path):
-        try:
-            with open(csv_path, "r", encoding="utf-8") as src, open(other_path, "w", encoding="utf-8") as dst:
-                dst.write(src.read())
-        except Exception:
-            pass
-
-    updated = get_quarantine_data()
-    return {
-        "status": "ok",
-        "repaired_records": repaired_records,
-        "metrics": updated["metrics"],
-        "invariant": updated["invariant"],
-        "quarantined_count": updated["metrics"]["quarantined"],
-        "duplicates_count": updated["metrics"]["duplicates"],
-        "rows": updated["rows"]
-    }
 
 def reset_quarantine_fixture() -> dict:
     csv_path = get_adversarial_csv_path()
-    orig_path = csv_path + ".original"
-    baseline_text = (
-        "InvoiceID,Amount ,Date\n"
-        "INV-3250-VTFZ,173.51,2026-04-25\n"
-        "INV-2772-UOKV,105.78,2026-07-16\n"
-        "INV-7401-WQWB,242.75,2026-10-05\n"
-        "INV-9783-WNNC,46,2026-02-10\n"
-        "INV-2059-IYIG,226.74,2026-03-09\n"
-        "INV-5960-WCJS,206.3,2026-05-25\n"
-        "INV-8931-WZNB,330.66,2026-06-26\n"
-        "INV-3083-MRUI,267.23,2026-04-21\n"
-        "INV-2337-OTPK,202.48,2026-01-18\n"
-        "INV-7234-GIXD,121.38,2026-09-03\n"
-        "INV-2059-IYIG,226.74,2026-03-09\n"
-        "INV-4459-QZJZ,-999.995,2026-05-16\n"
-    )
-    content = baseline_text
-    if os.path.exists(orig_path):
-        try:
-            with open(orig_path, "r", encoding="utf-8") as f:
-                content = f.read()
-        except Exception:
-            content = baseline_text
-
-    with open(csv_path, "w", encoding="utf-8") as f:
-        f.write(content)
-
-    other_path = os.path.join(HUD_DIR, "data", "adversarial_fixture.csv")
-    if os.path.abspath(other_path) != os.path.abspath(csv_path) and os.path.exists(other_path):
-        try:
-            with open(other_path, "w", encoding="utf-8") as f:
-                f.write(content)
-        except Exception:
-            pass
-
-    return {
-        "status": "ok",
-        "message": "Reset adversarial_fixture.csv to baseline state",
-        "data": get_quarantine_data()
-    }
+    return invoice_quarantine.reset_quarantine_fixture(csv_path=csv_path)
 
 def get_offline_ledger_and_invariant() -> dict:
     from job_ledger import JobLedger

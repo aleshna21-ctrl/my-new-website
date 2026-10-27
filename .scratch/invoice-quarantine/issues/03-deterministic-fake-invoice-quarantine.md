@@ -4,11 +4,11 @@
 
 **Blocked by:** 01: Authoritative Quarantine Seam & StrictStr Invariant Inspection
 
-**Status:** ready-for-agent
+**Status:** closed
 
-- [ ] `FakeInvoiceQuarantine` implements `inspect()`, `repair()`, and `reset()`
-- [ ] Supports pre-seeded rows at initialization (`initial_rows`)
-- [ ] Enforces the same `StrictStr` format and duplicate rules in memory
-- [ ] Maintains an audit trail `calls` recording all `inspect`, `repair`, and `reset` actions
-- [ ] Supports simulated operational failures via `should_fail=True`
-- [ ] Can be substituted cleanly for `InvoiceQuarantine` in route and visualization tests
+- [x] `FakeInvoiceQuarantine` implements `inspect()`, `repair()`, and `reset()`
+- [x] Supports pre-seeded rows at initialization (`initial_rows`)
+- [x] Enforces the same `StrictStr` format and duplicate rules in memory
+- [x] Maintains an audit trail `calls` recording all `inspect`, `repair`, and `reset` actions
+- [x] Supports simulated operational failures via `should_fail=True`
+- [x] Can be substituted cleanly for `InvoiceQuarantine` in route and visualization tests
