@@ -1,6 +1,6 @@
 # Specification: Invoice Quarantine Invariant Module
 
-**Status**: Ready for Agent (`ready-for-agent`)  
+**Status**: Implemented (`implemented`)  
 **Associated ADR**: [0004-invoice-quarantine-module.md](file:///c:/Users/alesh/jev-workspace/hud-interface/docs/adr/0004-invoice-quarantine-module.md)  
 **Domain Glossary Reference**: [GLOSSARY.md](file:///c:/Users/alesh/jev-workspace/hud-interface/GLOSSARY.md)
 
