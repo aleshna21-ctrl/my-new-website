@@ -226,53 +226,48 @@ class RealTimeVisualizationEngine:
                 trace_id=trace_id
             )
 
-        conn = None
+        from job_ledger import JobLedger
+        ledger = JobLedger(db_path=db_path, read_only=True)
         try:
-            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0)
-            conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
+            with ledger.connect() as conn:
+                conn.row_factory = sqlite3.Row
+                cur = conn.cursor()
 
-            # 1. Discover all tables and row counts
-            cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
-            table_names = [r["name"] for r in cur.fetchall()]
-            for tbl in table_names:
-                try:
-                    c = conn.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
-                    tables_summary[tbl] = {"row_count": c}
-                except Exception:
-                    tables_summary[tbl] = {"row_count": 0}
+                # 1. Discover all tables and row counts
+                cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                table_names = [r["name"] for r in cur.fetchall()]
+                for tbl in table_names:
+                    try:
+                        c = conn.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
+                        tables_summary[tbl] = {"row_count": c}
+                    except Exception:
+                        tables_summary[tbl] = {"row_count": 0}
 
-            # 2. Extract recent jobs adhering to the DAG transition protocol
-            if "jobs" in table_names:
-                cur.execute(
-                    "SELECT job_id, scope_id, job_type, state, attempt_count, created_at, updated_at "
-                    "FROM jobs ORDER BY updated_at DESC LIMIT 50"
-                )
-                for r in cur.fetchall():
-                    recent_jobs.append(SQLiteJobRecord(
-                        job_id=str(r["job_id"]),
-                        scope_id=str(r["scope_id"] or "default-scope"),
-                        job_type=str(r["job_type"] or "job"),
-                        state=str(r["state"]),
-                        attempt_count=int(r["attempt_count"] or 0),
-                        created_at=str(r["created_at"] or ""),
-                        updated_at=str(r["updated_at"] or "")
-                    ))
+                # 2. Extract recent jobs adhering to the DAG transition protocol
+                if "jobs" in table_names:
+                    cur.execute(
+                        "SELECT job_id, scope_id, job_type, state, attempt_count, created_at, updated_at "
+                        "FROM jobs ORDER BY updated_at DESC LIMIT 50"
+                    )
+                    for r in cur.fetchall():
+                        recent_jobs.append(SQLiteJobRecord(
+                            job_id=str(r["job_id"]),
+                            scope_id=str(r["scope_id"] or "default-scope"),
+                            job_type=str(r["job_type"] or "job"),
+                            state=str(r["state"]),
+                            attempt_count=int(r["attempt_count"] or 0),
+                            created_at=str(r["created_at"] or ""),
+                            updated_at=str(r["updated_at"] or "")
+                        ))
 
-            # 3. Extract sealed terminal diode events
-            if "hud_terminal_events" in table_names:
-                cur.execute("SELECT * FROM hud_terminal_events ORDER BY rowid DESC LIMIT 20")
-                for r in cur.fetchall():
-                    terminal_events.append(dict(r))
+                # 3. Extract sealed terminal diode events
+                if "hud_terminal_events" in table_names:
+                    cur.execute("SELECT * FROM hud_terminal_events ORDER BY rowid DESC LIMIT 20")
+                    for r in cur.fetchall():
+                        terminal_events.append(dict(r))
 
         except Exception as exc:
             tables_summary["_error"] = str(exc)
-        finally:
-            if conn:
-                try:
-                    conn.close()
-                except Exception:
-                    pass
 
         return SQLiteLedgerPayload(
             db_path=db_path,

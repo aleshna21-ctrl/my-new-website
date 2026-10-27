@@ -22,14 +22,15 @@ def register_ledger_routes(router: TypeSafeRouter, provider: Any):
     router.register("/api/offline-ledger", "GET", handle_offline_ledger, service="job-ledger")
 
     def handle_offline_ledger_cycle(**kwargs):
-        from job_ledger import queue_job, claim_job, update_job_state
+        import job_ledger
+        ledger = job_ledger.get_default_ledger()
         jid = f"job-hud-{int(datetime.now(timezone.utc).timestamp())}"
-        queue_job(jid, "hud-operator-scope", "reconciliation")
-        claimed = claim_job()
+        ledger.queue_job(jid, "hud-operator-scope", "reconciliation")
+        claimed = ledger.claim_job()
         if claimed:
-            update_job_state(claimed, "validated")
-            update_job_state(claimed, "approved")
-            update_job_state(claimed, "completed")
+            ledger.update_job_state(claimed, "validated")
+            ledger.update_job_state(claimed, "approved")
+            ledger.update_job_state(claimed, "completed")
         return {"job_id": jid, "claimed": claimed, "final_state": "completed"}
 
     router.register("/api/offline-ledger/cycle", "POST", handle_offline_ledger_cycle, service="job-ledger")

@@ -24,3 +24,7 @@ _Avoid_: Dead-letter queue, error bucket
 The unified inference adapter governing local model socket connections, bounded schema repair, and telemetry provenance.
 _Avoid_: LLM client, model wrapper, AI service
 
+**Metadata Diode**:
+The one-way sanitized outbox export emitting opaque state transition events to notification observers without leaking sensitive payloads or client context.
+_Avoid_: Event emitter, message bus, webhook
+

@@ -66,8 +66,8 @@ logger = logging.getLogger("DurableChaosTest")
 
 def resolve_ledger_path(custom_path: Optional[Path] = None) -> Path:
     """Finds active job_ledger.db (custom -> delivery-offline -> data)."""
-    if custom_path and custom_path.exists():
-        return custom_path
+    if custom_path is not None:
+        return Path(custom_path)
     offline_db = OFFLINE_DIR / "job_ledger.db"
     if offline_db.exists():
         return offline_db

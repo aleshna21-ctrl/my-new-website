@@ -399,23 +399,16 @@ def reset_quarantine_fixture() -> dict:
     }
 
 def get_offline_ledger_and_invariant() -> dict:
-    counts = {"queued": 0, "running": 0, "validated": 0, "approved": 0, "completed": 0, "quarantined": 0}
-    jobs = []
+    from job_ledger import JobLedger
     db_path = get_db_path()
     if os.path.exists(db_path):
-        try:
-            with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2.0) as conn:
-                conn.row_factory = sqlite3.Row
-                cur = conn.cursor()
-                cur.execute("SELECT job_id, job_type, state, attempt_count, updated_at FROM jobs ORDER BY updated_at DESC")
-                for row in cur.fetchall():
-                    d = dict(row)
-                    jobs.append(d)
-                    st = d.get("state", "")
-                    if st in counts:
-                        counts[st] += 1
-        except Exception:
-            pass
+        ledger = JobLedger(db_path=db_path, read_only=True)
+        snapshot = ledger.get_snapshot()
+        counts = snapshot.counts
+        jobs = snapshot.jobs
+    else:
+        counts = {"queued": 0, "running": 0, "validated": 0, "approved": 0, "completed": 0, "quarantined": 0}
+        jobs = []
 
     q_data = get_quarantine_data()
     return {
@@ -1035,38 +1028,12 @@ def enqueue_ai_inbox_task(body: dict, scope_default: str = "ui-task", job_type_d
     Writes the JSON payload as a new row in job_ledger.db with state '[ INBOX ]'
     without making any synchronous network calls to port 8080.
     """
-    from job_ledger import DB_FILE, init_db
-    init_db()
-
+    import job_ledger
     job_id = str(body.get("job_id") or f"task-ai-{int(time.time()*1000)}-{uuid.uuid4().hex[:6]}")
     scope = str(body.get("scope_id") or body.get("scope") or scope_default)
     job_type = str(body.get("job_type") or body.get("command") or body.get("cmd") or job_type_default)
-    now = datetime.now(timezone.utc).isoformat()
     raw_payload = json.dumps(body)
-
-    with sqlite3.connect(DB_FILE, timeout=10.0) as conn:
-        cur = conn.cursor()
-        cur.execute("PRAGMA table_info(jobs)")
-        existing_cols = {col[1] for col in cur.fetchall()}
-        if "payload" not in existing_cols:
-            cur.execute("ALTER TABLE jobs ADD COLUMN payload TEXT")
-        if "model_output" not in existing_cols:
-            cur.execute("ALTER TABLE jobs ADD COLUMN model_output TEXT")
-        conn.commit()
-
-    with sqlite3.connect(DB_FILE, timeout=10.0, isolation_level=None) as conn:
-        cur = conn.cursor()
-        cur.execute("BEGIN IMMEDIATE")
-        try:
-            cur.execute("""
-                INSERT OR REPLACE INTO jobs (job_id, scope_id, job_type, state, attempt_count, payload, created_at, updated_at)
-                VALUES (?, ?, ?, '[ INBOX ]', 0, ?, ?, ?)
-            """, (job_id, scope, job_type, raw_payload, now, now))
-            conn.execute("COMMIT")
-        except Exception:
-            conn.execute("ROLLBACK")
-            raise
-
+    job_ledger.inject_inbox_job(job_id=job_id, scope_id=scope, job_type=job_type, state="[ INBOX ]", payload=raw_payload)
     return job_id
 
 
