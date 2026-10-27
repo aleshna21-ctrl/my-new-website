@@ -110,46 +110,39 @@ def get_hermes_models_url() -> str:
         return f"{get_hermes_base_url()}/v1/models"
 
 def probe_hermes_live() -> dict:
-    url = get_hermes_models_url()
-    try:
-        req = urllib.request.Request(url, method="GET")
-        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req, timeout=1.5) as resp:
-            return {"reachable": resp.status == 200, "http_status": resp.status}
-    except Exception as e:
-        return {"reachable": False, "error": str(e)}
+    import inference_adapter as ia
+    adp = ia.LiveLocalModelAdapter(endpoint=get_hermes_endpoint(), model_tag=get_hermes_model())
+    h = adp.health(probe_live=True)
+    return {"reachable": h.reachable, "http_status": 200 if h.reachable else 503, "error": h.get("live_probe_detail", "OK")}
 
 def get_hermes_telemetry() -> dict:
-    live = probe_hermes_live()
-    t_file = os.path.join(OFFLINE_DIR, "inference_telemetry.json")
-    hud_file = os.path.join(HUD_DIR, "inference_telemetry.json")
-    if os.path.exists(hud_file):
-        if not os.path.exists(t_file) or os.path.getmtime(hud_file) >= os.path.getmtime(t_file):
+    import inference_adapter as ia
+    adp = ia.LiveLocalModelAdapter(endpoint=get_hermes_endpoint(), model_tag=get_hermes_model())
+    h = adp.health(probe_live=True)
+    if not h.get("attempts") and not h.get("timestamp_utc"):
+        t_file = os.path.join(OFFLINE_DIR, "inference_telemetry.json")
+        hud_file = os.path.join(HUD_DIR, "inference_telemetry.json")
+        if os.path.exists(hud_file) and (not os.path.exists(t_file) or os.path.getmtime(hud_file) >= os.path.getmtime(t_file)):
             t_file = hud_file
-    saved = {}
-    if os.path.exists(t_file):
-        try:
-            with open(t_file, "r", encoding="utf-8") as f:
-                saved = json.load(f)
-        except Exception:
-            saved = {}
-    exec_mode = saved.get("execution_mode", "untested")
-    is_sim = saved.get("is_simulated", False)
-    return {
-        "live_loopback_reachable": live["reachable"],
-        "live_probe_detail": live.get("error", "OK"),
-        "last_execution_mode": exec_mode,
-        "is_simulated": is_sim,
-        "last_status": saved.get("status", "none"),
-        "max_tokens": saved.get("max_tokens", 2048),
-        "max_retries": saved.get("max_retries", 1),
-        "attempts": saved.get("attempts", []),
-        "timestamp_utc": saved.get("timestamp_utc", None),
-        "model": saved.get("model", get_hermes_model()),
-        "endpoint": saved.get("endpoint", get_hermes_endpoint()),
-        "probe_running": PROBE_LOCK.locked(),
-        "server_pid": os.getpid(),
-        "build_id": BUILD_ID
-    }
+        if os.path.exists(t_file):
+            try:
+                with open(t_file, "r", encoding="utf-8") as f:
+                    saved = json.load(f)
+                h.update({
+                    "last_execution_mode": saved.get("execution_mode", "untested"),
+                    "is_simulated": saved.get("is_simulated", False),
+                    "last_status": saved.get("status", "none"),
+                    "max_tokens": saved.get("max_tokens", 2048),
+                    "max_retries": saved.get("max_retries", 1),
+                    "attempts": saved.get("attempts", []),
+                    "timestamp_utc": saved.get("timestamp_utc", None),
+                    "model": saved.get("model", get_hermes_model()),
+                    "endpoint": saved.get("endpoint", get_hermes_endpoint())
+                })
+            except Exception:
+                pass
+    h["probe_running"] = PROBE_LOCK.locked()
+    return h
 
 def get_db_path() -> str:
     db_path = os.path.join(OFFLINE_DIR, "job_ledger.db")
@@ -650,57 +643,46 @@ def get_cortex_streaming_series(trace_id: Optional[str] = None) -> List[Dict[str
             resp = VISUALIZATION_ENGINE.get_streaming_series(trace_id=trace_id)
         return [pt.model_dump() for pt in resp.series]
 
-# Register Type-Safe Routes for Real-Time Visualization, Ledger & Observability
-TYPE_SAFE_ROUTER.register(
-    "/api/cortex/streaming-series", "GET",
-    lambda trace_id=None, **_: StreamingSeriesResponse(
-        status="ok",
-        series=get_cortex_streaming_series(trace_id=trace_id),
-        buffer_size=len(get_cortex_streaming_series(trace_id=trace_id)),
-        window_seconds=60,
-        trace_id=trace_id
-    ),
-    response_model=StreamingSeriesResponse,
-    service="aios-visualization"
-)
-TYPE_SAFE_ROUTER.register(
-    "/api/cortex/hierarchy", "GET",
-    lambda trace_id=None, **_: VISUALIZATION_ENGINE.generate_dag_hierarchy(trace_id=trace_id),
-    response_model=CortexHierarchyPayload,
-    service="aios-visualization"
-)
-TYPE_SAFE_ROUTER.register(
-    "/api/sqlite/ledger", "GET",
-    lambda trace_id=None, **_: VISUALIZATION_ENGINE.get_sqlite_ledger(trace_id=trace_id),
-    response_model=SQLiteLedgerPayload,
-    service="aios-ledger-diode"
-)
-TYPE_SAFE_ROUTER.register(
-    "/api/cortex/credits", "GET",
-    lambda **_: get_cortex_credits(),
-    service="aios-governance"
-)
-TYPE_SAFE_ROUTER.register(
-    "/api/cortex/tasks", "GET",
-    lambda **_: get_cortex_automated_tasks(),
-    service="aios-governance"
-)
-TYPE_SAFE_ROUTER.register(
-    "/api/observability/metrics", "GET",
-    lambda **_: GLOBAL_OBSERVABILITY.get_metrics(),
-    response_model=EncoreObservabilityMetrics,
-    service="aios-observability"
-)
-TYPE_SAFE_ROUTER.register(
-    "/api/observability/traces", "GET",
-    lambda **_: {"status": "ok", "traces": GLOBAL_OBSERVABILITY.get_recent_spans()},
-    service="aios-observability"
-)
-TYPE_SAFE_ROUTER.register(
-    "/api/observability/health", "GET",
-    lambda **_: {"status": "healthy", "service": "aios-hud-server", "framework": "encore", "version": "1.58.8"},
-    service="aios-observability"
-)
+def wait_telemetry_event(timeout: float = 2.0):
+    _TELEMETRY_TRIGGER.wait(timeout=timeout)
+    _TELEMETRY_TRIGGER.clear()
+
+def toggle_cortex_auto_accept(body: dict) -> dict:
+    global _CORTEX_AUTO_ACCEPT
+    if isinstance(body, dict) and "enabled" in body:
+        _CORTEX_AUTO_ACCEPT = bool(body["enabled"])
+    else:
+        _CORTEX_AUTO_ACCEPT = not _CORTEX_AUTO_ACCEPT
+    notify_telemetry_event()
+    return {"status": "ok", "auto_accept_enabled": _CORTEX_AUTO_ACCEPT}
+
+def execute_hermes_probe(body: dict):
+    allow_sim = body.get("allow_simulation", False)
+    if type(allow_sim) is not bool:
+        from hud.type_safe_router import HTTPResponse
+        return HTTPResponse(status_code=400, payload={"error": "allow_simulation must be a JSON boolean."})
+    if not PROBE_LOCK.acquire(blocking=False):
+        from hud.type_safe_router import HTTPResponse
+        return HTTPResponse(status_code=409, payload={"error": "A probe is already running. Wait for its result."})
+    try:
+        from inference_adapter import LiveLocalModelAdapter, FailureEvent
+        sample = {"type": "probe_test", "description": "Synthetic HUD connectivity test",
+                  "reported_events": 1, "period": "TEST", "evidence_ids": ["hud-probe-" + uuid.uuid4().hex]}
+        prompt = "Extract the following synthetic event exactly, preserving all values: " + json.dumps(sample)
+        adapter = LiveLocalModelAdapter(endpoint=get_hermes_endpoint(),
+                                        model_tag=get_hermes_model(),
+                                        allow_simulation=allow_sim)
+        res = adapter.query(prompt, schema=FailureEvent)
+        with _HERMES_CACHE_LOCK:
+            _HERMES_CACHE["value"] = None
+            _HERMES_CACHE["at"] = 0.0
+        from hud.type_safe_router import HTTPResponse
+        return HTTPResponse(status_code=200, payload=res)
+    except Exception as exc:
+        from hud.type_safe_router import HTTPResponse
+        return HTTPResponse(status_code=500, payload={"error": "Probe failed: " + str(exc), "error_type": type(exc).__name__})
+    finally:
+        PROBE_LOCK.release()
 
 # --------------------------------------------------------------------------- #
 # AI OS dashboard: telemetry frame + board helpers (logic lives in hud/os_dashboard.py)
@@ -1047,12 +1029,165 @@ setInterval(refreshAll, 5000);
 </html>
 """
 
+def enqueue_ai_inbox_task(body: dict, scope_default: str = "ui-task", job_type_default: str = "ai_task") -> str:
+    """
+    Decoupled AI message broker intake:
+    Writes the JSON payload as a new row in job_ledger.db with state '[ INBOX ]'
+    without making any synchronous network calls to port 8080.
+    """
+    from job_ledger import DB_FILE, init_db
+    init_db()
+
+    job_id = str(body.get("job_id") or f"task-ai-{int(time.time()*1000)}-{uuid.uuid4().hex[:6]}")
+    scope = str(body.get("scope_id") or body.get("scope") or scope_default)
+    job_type = str(body.get("job_type") or body.get("command") or body.get("cmd") or job_type_default)
+    now = datetime.now(timezone.utc).isoformat()
+    raw_payload = json.dumps(body)
+
+    with sqlite3.connect(DB_FILE, timeout=10.0) as conn:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(jobs)")
+        existing_cols = {col[1] for col in cur.fetchall()}
+        if "payload" not in existing_cols:
+            cur.execute("ALTER TABLE jobs ADD COLUMN payload TEXT")
+        if "model_output" not in existing_cols:
+            cur.execute("ALTER TABLE jobs ADD COLUMN model_output TEXT")
+        conn.commit()
+
+    with sqlite3.connect(DB_FILE, timeout=10.0, isolation_level=None) as conn:
+        cur = conn.cursor()
+        cur.execute("BEGIN IMMEDIATE")
+        try:
+            cur.execute("""
+                INSERT OR REPLACE INTO jobs (job_id, scope_id, job_type, state, attempt_count, payload, created_at, updated_at)
+                VALUES (?, ?, ?, '[ INBOX ]', 0, ?, ?, ?)
+            """, (job_id, scope, job_type, raw_payload, now, now))
+            conn.execute("COMMIT")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
+
+    return job_id
+
+
+
+# --------------------------------------------------------------------------- #
+# Domain Route Registration & Transport Adapter Seam
+# --------------------------------------------------------------------------- #
+from hud.routes import register_all_routes
+register_all_routes(TYPE_SAFE_ROUTER, sys.modules[__name__])
+
+
 class HUDRequestHandler(BaseHTTPRequestHandler):
+    """
+    Thin HTTP Transport Adapter.
+    Translates raw socket streams into in-process HTTPRequest models, forwards across
+    the dispatch seam (TYPE_SAFE_ROUTER.dispatch), and writes HTTPResponse to the socket.
+    Decoupled from route definitions, business logic, and schema validation.
+    """
+    server_version = "AIOS-HUD/" + BUILD_ID
+    sys_version = ""
+
     def log_message(self, format, *args):
         return
 
+    def do_OPTIONS(self):
+        self._dispatch_request("OPTIONS")
+
+    def do_HEAD(self):
+        self._dispatch_request("HEAD")
+
+    def do_GET(self):
+        self._dispatch_request("GET")
+
+    def do_POST(self):
+        self._dispatch_request("POST")
+
+    def do_PUT(self):
+        self._dispatch_request("PUT")
+
+    def do_DELETE(self):
+        self._dispatch_request("DELETE")
+
+    def _dispatch_request(self, method: str):
+        path, _, raw_query = self.path.partition("?")
+        query = parse_qs(raw_query)
+        headers = dict(self.headers)
+
+        body = None
+        raw_body = b""
+        if method in ("POST", "PUT", "PATCH"):
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                limit = 524288 if path == "/api/os/editor/save" else 65536
+                if not 0 <= length <= limit:
+                    self._send_error_response(413, "Request body is too large.")
+                    return
+                raw_body = self.rfile.read(length) if length else b""
+                if raw_body:
+                    try:
+                        body = json.loads(raw_body.decode("utf-8"))
+                    except Exception:
+                        body = None
+            except Exception as exc:
+                self._send_error_response(400, f"Malformed request: {exc}")
+                return
+
+        from hud.type_safe_router import HTTPRequest
+        req = HTTPRequest(
+            path=path,
+            method=method,
+            headers=headers,
+            query=query,
+            body=body if body is not None else {},
+            raw_body=raw_body
+        )
+
+        resp = TYPE_SAFE_ROUTER.dispatch(req)
+
+        try:
+            self.send_response(resp.status_code)
+            for k, v in resp.headers.items():
+                self.send_header(k, str(v))
+
+            if resp.is_stream:
+                self.end_headers()
+                for chunk in resp.body:
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+            else:
+                raw_bytes = b""
+                if isinstance(resp.body, bytes):
+                    raw_bytes = resp.body
+                elif isinstance(resp.body, str):
+                    raw_bytes = resp.body.encode("utf-8")
+                elif resp.body is not None:
+                    raw_bytes = json.dumps(resp.body, default=str).encode("utf-8")
+
+                if "Content-Length" not in resp.headers:
+                    self.send_header("Content-Length", str(len(raw_bytes)))
+                self.end_headers()
+
+                if method != "HEAD" and raw_bytes:
+                    self.wfile.write(raw_bytes)
+                    self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            return
+
+    def _send_error_response(self, status: int, message: str):
+        payload = json.dumps({"error": message, "status": "error"}).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        try:
+            self.wfile.write(payload)
+            self.wfile.flush()
+        except OSError:
+            pass
+
     def _send_json(self, data: dict, status: int = 200, ack_id: str | None = None, seq_id: int | None = None, rtt_ms: float | None = None):
-        raw = json.dumps(data).encode("utf-8")
+        raw = json.dumps(data, default=str).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
@@ -1072,11 +1207,14 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
         if rtt_ms is not None:
             self.send_header("X-Gateway-RTT", str(rtt_ms))
         self.end_headers()
-        self.wfile.write(raw)
-        self.wfile.flush()
+        try:
+            self.wfile.write(raw)
+            self.wfile.flush()
+        except OSError:
+            pass
 
     def _send_type_safe_json(self, data: dict, status: int = 200, headers: dict | None = None):
-        raw = json.dumps(data).encode("utf-8")
+        raw = json.dumps(data, default=str).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
@@ -1088,689 +1226,11 @@ class HUDRequestHandler(BaseHTTPRequestHandler):
                 if k.lower() not in ("content-type", "content-length", "cache-control", "x-accel-buffering", "content-security-policy"):
                     self.send_header(k, str(v))
         self.end_headers()
-        self.wfile.write(raw)
-        self.wfile.flush()
-
-    def _send_static(self, rel_path: str, csp: str | None = None):
-        """Serve a file under hud-interface/static only (no traversal)."""
-        root = os.path.realpath(os.path.join(HUD_DIR, "static"))
-        fpath = os.path.realpath(os.path.join(root, rel_path))
-        if os.path.commonpath([root, fpath]) != root or not os.path.isfile(fpath):
-            self._send_json({"error": "Not found"}, 404)
-            return
-        types = {".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json"}
-        ctype = types.get(os.path.splitext(fpath)[1].lower(), "application/octet-stream")
-        with open(fpath, "rb") as f:
-            raw = f.read()
-        self.send_response(200)
-        self.send_header("Content-Type", ctype + "; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        if csp:
-            self.send_header("Content-Security-Policy", csp)
-            self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header("Content-Length", str(len(raw)))
-        self.end_headers()
-        self.wfile.write(raw)
-
-    # ------------------------------------------------------------------ #
-    # AI OS dashboard routes
-    # ------------------------------------------------------------------ #
-    def _send_os_error(self, exc: Exception):
-        from hud.gtm import Conflict
-        if isinstance(exc, Conflict) or isinstance(exc, RuntimeError):
-            status = 409
-        elif isinstance(exc, (KeyError, FileNotFoundError)):
-            status = 404
-        elif isinstance(exc, TimeoutError):
-            status = 503
-        elif isinstance(exc, (ValueError, TypeError)):
-            status = 400
-        else:
-            status = 500
-        message = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
-        self._send_json({"error": message, "error_type": type(exc).__name__}, status)
-
-    def _stream_os_telemetry(self):
-        """Server-Sent Events: one compact frame when anything changes, a ping every 15 s.
-        Each connection lives 10 minutes, then the browser's EventSource reconnects.
-        Enforces zero-buffering headers and event-triggered fast-path wakeups."""
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Cache-Control", "no-cache, no-transform, no-store")
-        self.send_header("X-Accel-Buffering", "no")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.end_headers()
-        last_hash, last_sent, seq = None, 0.0, 0
-        deadline = time.monotonic() + 600
         try:
-            self.wfile.write(b"retry: 3000\n\n")
-            self.wfile.flush()
-            while time.monotonic() < deadline:
-                try:
-                    frame = os_frame()
-                except Exception as exc:  # report, do not kill the stream
-                    frame = {"error": f"{type(exc).__name__}: {exc}", "hash": "error"}
-                if frame.get("hash") != last_hash:
-                    seq += 1
-                    frame["seq"] = seq
-                    payload = json.dumps(frame, default=str)
-                    self.wfile.write(f"event: telemetry\nid: {seq}\ndata: {payload}\n\n".encode("utf-8"))
-                    last_hash, last_sent = frame.get("hash"), time.monotonic()
-                elif time.monotonic() - last_sent >= 15:
-                    ping = json.dumps({"ts": datetime.now(timezone.utc).isoformat(timespec="seconds"), "seq": seq})
-                    self.wfile.write(f"event: ping\ndata: {ping}\n\n".encode("utf-8"))
-                    last_sent = time.monotonic()
-                self.wfile.flush()
-                # Fast-path event wait: wakes immediately upon state change or every 2 seconds
-                _TELEMETRY_TRIGGER.wait(timeout=2.0)
-                _TELEMETRY_TRIGGER.clear()
-        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
-            return
-
-    def _handle_os_get(self, path: str, query: dict):
-        from hud import os_dashboard as osd
-        q = lambda key: (query.get(key) or [""])[0]
-        try:
-            if path == "/api/os/stream":
-                self._stream_os_telemetry()
-            elif path == "/api/os/telemetry":
-                self._send_json(os_frame())
-            elif path == "/api/os/obsidian":
-                if q("rescan") in ("1", "true", "yes"):
-                    osd.invalidate_vault_cache()
-                self._send_json(os_frame().get("obsidian", {}))
-            elif path == "/api/os/board":
-                self._send_json(os_board_payload())
-            elif path == "/api/os/inbox":
-                self._send_json(os_inbox_payload())
-            elif path == "/api/os/outbox":
-                self._send_json(os_outbox_payload())
-            elif path == "/api/os/docs":
-                self._send_json({"docs": osd.list_docs()})
-            elif path == "/api/os/doc":
-                self._send_json(osd.read_doc(q("id")))
-            elif path == "/api/os/editor/files":
-                self._send_json(osd.editor_list())
-            elif path == "/api/os/editor/file":
-                self._send_json(osd.editor_read(q("name")))
-            else:
-                self._send_json({"error": "Not found"}, 404)
-        except Exception as exc:
-            self._send_os_error(exc)
-
-    def _handle_os_post(self, path: str, body: dict):
-        from hud import os_dashboard as osd
-        try:
-            if path == "/api/os/board":
-                osd.apply_board_op(body)
-                notify_telemetry_event()
-                self._send_json(os_board_payload())
-            elif path == "/api/os/editor/save":
-                self._send_json(osd.editor_save(str(body.get("name", "")), body.get("text"), body.get("base_sha256") or None))
-            elif path == "/api/os/obsidian/note":
-                self._send_json(osd.create_vault_note(body))
-                notify_telemetry_event()
-            elif path == "/api/os/obsidian/rescan":
-                osd.invalidate_vault_cache()
-                notify_telemetry_event()
-                self._send_json(os_frame().get("obsidian", {}))
-            elif path == "/api/os/outbox/decide":
-                from hud.gtm import decide
-                decide(os.path.join(GTM_DIR, "staged_outreach.json"), str(body.get("id", "")),
-                       str(body.get("revision", "")), str(body.get("decision", "")))
-                notify_telemetry_event()
-                self._send_json(os_outbox_payload())
-            else:
-                self._send_json({"error": "Unknown endpoint"}, 404)
-        except Exception as exc:
-            self._send_os_error(exc)
-
-    def do_GET(self):
-        path, _, raw_query = self.path.partition("?")
-        if (path, "GET") in TYPE_SAFE_ROUTER._routes or path.startswith("/api/observability/"):
-            res, status_code, extra_headers = TYPE_SAFE_ROUTER.dispatch(path, "GET", dict(self.headers), query=parse_qs(raw_query))
-            self._send_type_safe_json(res, status_code, extra_headers)
-            return
-        if path.startswith("/api/os/"):
-            self._handle_os_get(path, parse_qs(raw_query))
-            return
-        if path in ("/", "/os"):
-            # Primary view: AI OS dashboard (static/os.html).
-            self._send_static("os.html", csp=OS_PAGE_CSP)
-        elif path in ("/cockpit", "/index.html"):
-            # Synchronized cockpit (Prototype III), previously the default view.
-            self._send_static("index.html")
-        elif path.startswith("/static/"):
-            self._send_static(path[len("/static/"):])
-        elif path == "/legacy":
-            raw = INDEX_HTML.encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", str(len(raw)))
-            self.end_headers()
             self.wfile.write(raw)
-        elif self.path == "/api/hermes":
-            self._send_json(get_hermes_telemetry())
-        elif self.path == "/api/offline-ledger":
-            self._send_json(get_offline_ledger_and_invariant())
-        elif self.path == "/api/quarantine":
-            self._send_json(get_quarantine_data())
-        elif self.path == "/api/gtm-queue":
-            self._send_json(get_gtm_queue())
-        elif self.path == "/api/alerts":
-            self._send_json(get_alerts_status())
-        elif self.path == "/api/omnibus":
-            from hud.omnibus import get_omnibus_bundle
-            self._send_json(get_omnibus_bundle())
-        elif self.path == "/api/guardrail/events":
-            from hud.jev_guard import GUARDRAIL_LOG
-            if os.path.exists(GUARDRAIL_LOG):
-                try:
-                    with open(GUARDRAIL_LOG, "r", encoding="utf-8") as f:
-                        self._send_json(json.load(f))
-                        return
-                except Exception:
-                    pass
-            self._send_json([])
-        elif self.path == "/api/jev-cheap-read/fixtures":
-            from hud.jev_cheap_read import list_cheap_read_fixtures
-            self._send_json(list_cheap_read_fixtures())
-        elif self.path == "/api/jev-agentic/events":
-            from hud.jev_agentic import AGENTIC_JEV_LOG
-            if os.path.exists(AGENTIC_JEV_LOG):
-                try:
-                    with open(AGENTIC_JEV_LOG, "r", encoding="utf-8") as f:
-                        self._send_json(json.load(f))
-                        return
-                except Exception:
-                    pass
-            self._send_json([])
-        elif self.path == "/api/jev-composite-gate/presets":
-            from hud.jev_composite_gate import GTM_OUTREACH_WEIGHTS, CODE_REVIEW_WEIGHTS, IDEA_VERDICT_WEIGHTS
-            self._send_json({
-                "weights": {
-                    "gtm_outreach": GTM_OUTREACH_WEIGHTS,
-                    "code_review": CODE_REVIEW_WEIGHTS,
-                    "idea_verdict": IDEA_VERDICT_WEIGHTS,
-                },
-                "confidence_thresholds": {"floor": 0.50, "ceiling": 0.90},
-            })
-        elif self.path == "/api/jev-e2e/events":
-            from hud.jev_e2e_pipeline import get_recent_e2e_events
-            self._send_json(get_recent_e2e_events())
-        elif self.path == "/api/session":
-            self._send_json({"token": "local-session-token", "authenticated": True})
-        elif self.path == "/api/gateway/status":
-            self._send_json(get_gateway_status())
-        elif self.path in ("/api/gateway/feedback", "/api/gateway/sync"):
-            from hud.gateway import GLOBAL_SYNC_TRACKER, GLOBAL_FEEDBACK_LOOP
-            self._send_json({
-                "status": "ok",
-                "sequence_id": GLOBAL_SYNC_TRACKER.current_seq(),
-                "feedback": GLOBAL_FEEDBACK_LOOP.get_metrics(),
-                "history": GLOBAL_SYNC_TRACKER.get_history(limit=25),
-                "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-            })
-        elif self.path == "/api/gateway/crons":
-            from hud.gateway import load_cron_registry
-            self._send_json({"status": "ok", "crons": load_cron_registry()})
-        elif self.path == "/api/gateway/tasks":
-            from hud.gateway import load_task_history
-            self._send_json({"status": "ok", "tasks": load_task_history()})
-        elif self.path == "/api/cortex/credits":
-            self._send_json(get_cortex_credits())
-        elif self.path == "/api/cortex/tasks":
-            self._send_json(get_cortex_automated_tasks())
-        elif self.path == "/api/cortex/hierarchy":
-            self._send_json(get_cortex_hierarchy())
-        elif self.path == "/api/cortex/streaming-series":
-            self._send_json({"status": "ok", "series": get_cortex_streaming_series()})
-        elif self.path == "/api/sqlite/ledger":
-            self._send_json(get_sqlite_ledger_data())
-        elif self.path == "/api/memory/state":
-            from hud.shared_memory import get_shared_memory_store
-            self._send_json(get_shared_memory_store().get_state_summary())
-        elif self.path.startswith("/api/memory/tasks"):
-            from hud.shared_memory import get_shared_memory_store
-            self._send_json({"status": "ok", "tasks": get_shared_memory_store().get_completed_tasks()})
-        elif self.path.startswith("/api/memory/blackboard"):
-            from hud.shared_memory import get_shared_memory_store
-            store = get_shared_memory_store()
-            q_parsed = parse_qs(urlparse(self.path).query)
-            key = (q_parsed.get("key") or [""])[0]
-            if key:
-                self._send_json({"key": key, "value": store.get_blackboard_key(key)})
-            else:
-                self._send_json({"status": "ok", "entries": store.get_all_blackboard_entries()})
-        elif self.path == "/api/memory/obsidian-status":
-            from hud.shared_memory import get_shared_memory_store, PRIMARY_VAULT_DIR, LOCAL_VAULT_DIR
-            store = get_shared_memory_store()
-            self._send_json({
-                "status": store._vault_sync_status,
-                "last_vault_sync_utc": store._last_vault_sync_utc,
-                "primary_vault_dir": str(PRIMARY_VAULT_DIR),
-                "primary_vault_exists": PRIMARY_VAULT_DIR.exists(),
-                "local_vault_dir": str(LOCAL_VAULT_DIR),
-                "local_vault_exists": LOCAL_VAULT_DIR.exists()
-            })
-        elif self.path == "/api/hud":
-            self._send_json({
-                "hermes": get_hermes_telemetry(),
-                "ledger": get_offline_ledger_and_invariant(),
-                "alerts": get_alerts_status()
-            })
-        elif self.path in ("/prototype-1-ring-command.html", "/prototype-2-minimal-3d.html", "/prototype-3-cockpit-split.html", "/static/jev-omnibus.js"):
-            fpath = os.path.join(HUD_DIR, self.path.lstrip("/"))
-            if os.path.isfile(fpath):
-                raw = open(fpath, "rb").read()
-                ctype = "text/javascript; charset=utf-8" if fpath.endswith(".js") else "text/html; charset=utf-8"
-                self.send_response(200)
-                self.send_header("Content-Type", ctype)
-                self.send_header("Cache-Control", "no-store")
-                self.send_header("Content-Length", str(len(raw)))
-                self.end_headers()
-                self.wfile.write(raw)
-            else:
-                self._send_json({"error": "Not found"}, 404)
-        else:
-            self._send_json({"error": "Not found"}, 404)
-
-    def do_POST(self):
-        try:
-            length = int(self.headers.get("Content-Length", "0"))
-            # The scratch editor may save up to 128 KB of UTF-8 text (JSON-escaped -> allow 512 KB).
-            limit = 524288 if self.path == "/api/os/editor/save" else 16384
-            if not 0 <= length <= limit:
-                self._send_json({"error": "Request body is too large."}, 413)
-                return
-            raw_body = self.rfile.read(length) if length else b"{}"
-            body = json.loads(raw_body.decode("utf-8")) if length else {}
-            if not isinstance(body, dict):
-                raise ValueError("Request body must be a JSON object.")
-        except (ValueError, UnicodeError) as exc:
-            self._send_json({"error": str(exc)}, 400)
-            return
-
-        if (self.path, "POST") in TYPE_SAFE_ROUTER._routes:
-            res, status_code, extra_headers = TYPE_SAFE_ROUTER.dispatch(self.path, "POST", dict(self.headers), body=body)
-            self._send_type_safe_json(res, status_code, extra_headers)
-            return
-
-        if self.path.startswith("/api/os/"):
-            self._handle_os_post(self.path, body)
-            return
-
-        if self.path == "/api/hermes/probe":
-            allow_sim = body.get("allow_simulation", False)
-            if type(allow_sim) is not bool:
-                self._send_json({"error": "allow_simulation must be a JSON boolean."}, 400)
-                return
-            if not PROBE_LOCK.acquire(blocking=False):
-                self._send_json({"error": "A probe is already running. Wait for its result."}, 409)
-                return
-            try:
-                from inference_adapter import LiveLocalModelAdapter, FailureEvent
-                sample = {"type": "probe_test", "description": "Synthetic HUD connectivity test",
-                          "reported_events": 1, "period": "TEST", "evidence_ids": ["hud-probe-" + uuid.uuid4().hex]}
-                prompt = "Extract the following synthetic event exactly, preserving all values: " + json.dumps(sample)
-                adapter = LiveLocalModelAdapter(endpoint=get_hermes_endpoint(),
-                                                model_tag=get_hermes_model(),
-                                                allow_simulation=allow_sim)
-                res = adapter.enforce_schema_and_quarantine(prompt, FailureEvent)
-                with _HERMES_CACHE_LOCK:
-                    _HERMES_CACHE["value"] = None
-                    _HERMES_CACHE["at"] = 0.0
-                self._send_json(res)
-            except Exception as exc:
-                self._send_json({"error": "Probe failed: " + str(exc), "error_type": type(exc).__name__}, 500)
-            finally:
-                PROBE_LOCK.release()
-
-        elif self.path == "/api/offline-ledger/cycle":
-            from job_ledger import queue_job, claim_job, update_job_state
-            jid = f"job-hud-{int(datetime.now(timezone.utc).timestamp())}"
-            queue_job(jid, "hud-operator-scope", "reconciliation")
-            claimed = claim_job()
-            if claimed:
-                update_job_state(claimed, "validated")
-                update_job_state(claimed, "approved")
-                update_job_state(claimed, "completed")
-            self._send_json({"job_id": jid, "claimed": claimed, "final_state": "completed"})
-
-        elif self.path == "/api/quarantine/repair":
-            row_idx = int(body.get("row_idx", body.get("row", 0)))
-            inv_id = body.get("invoice_id")
-            amt = body.get("amount")
-            dt = body.get("date")
-            auto_rec = bool(body.get("auto_recover", False))
-            auto_all = bool(body.get("auto_recover_all", False))
-            res = repair_quarantine_row(row_idx, invoice_id=inv_id, amount=amt, date=dt,
-                                        auto_recover=auto_rec, auto_recover_all=auto_all)
-            status_code = 400 if res.get("status") == "error" else 200
-            self._send_json(res, status_code)
-
-        elif self.path == "/api/quarantine/reset":
-            self._send_json(reset_quarantine_fixture())
-
-        elif self.path == "/api/gtm-queue/review":
-            stage_path = os.path.join(GTM_DIR, "staged_outreach.json")
-            idx = int(body.get("index", -1))
-            new_status = body.get("status", "needs_review")
-            if new_status in {"needs_review", "approved", "rejected"} and os.path.exists(stage_path):
-                with open(stage_path, "r", encoding="utf-8") as f:
-                    drafts = json.load(f)
-                if 0 <= idx < len(drafts):
-                    drafts[idx]["status"] = new_status
-                    with open(stage_path, "w", encoding="utf-8") as f:
-                        json.dump(drafts, f, indent=2)
-            self._send_json({"updated": True})
-
-        elif self.path == "/api/alerts/dispatch":
-            from smtp_alert_relay import dispatch_pending_alerts
-            res = dispatch_pending_alerts()
-            self._send_json(res)
-        elif self.path == "/api/assistant":
-            from hud.omnibus import query_project_assistant
-            self._send_json(query_project_assistant(str(body.get("query", "")), str(body.get("scope", "all"))))
-        elif self.path == "/api/jev-decide":
-            from hud.omnibus import evaluate_jev_system_one
-            self._send_json(evaluate_jev_system_one(body.get("state", {}), body.get("questions", {})))
-        elif self.path == "/api/jev-rung":
-            from hud.omnibus import evaluate_jev_trading_rung
-            self._send_json(evaluate_jev_trading_rung(body.get("judgments", {}), bool(body.get("hard_risk_breach", False))))
-        elif self.path == "/api/guardrail/bash":
-            from hud.jev_guard import check_bash_command
-            cmd = str(body.get("command", ""))
-            verdict = check_bash_command(cmd)
-            self._send_json({
-                "allowed": verdict.allowed,
-                "command": verdict.command,
-                "risk_score": verdict.risk_score,
-                "reason": verdict.reason,
-                "irreversible": verdict.irreversible,
-                "notice": verdict.notice,
-            })
-        elif self.path == "/api/jev-cheap-read":
-            from hud.jev_cheap_read import ask_jev_file_bool, ask_jev_file_choice, ask_jev_file_score
-            mode = str(body.get("mode", "bool")).strip().lower()
-            path = str(body.get("path", ""))
-            question = str(body.get("question", ""))
-            if mode == "bool":
-                self._send_json(ask_jev_file_bool(path, question, str(body.get("yes_criteria", "")), str(body.get("no_criteria", ""))))
-            elif mode == "choice":
-                opts = body.get("options", [])
-                self._send_json(ask_jev_file_choice(path, question, [str(x) for x in opts] if isinstance(opts, list) else []))
-            elif mode == "score":
-                lvs = body.get("levels", ["low", "moderate", "high", "strict"])
-                self._send_json(ask_jev_file_score(path, question, [str(x) for x in lvs] if isinstance(lvs, list) else ["low", "high"]))
-            else:
-                self._send_json({"error": "Unsupported cheap-read mode"}, 400)
-        elif self.path == "/api/jev-multi-file":
-            from hud.jev_multi_file import ask_jev_files, pick_first_file, scout_and_pick
-            mode = str(body.get("mode", "scout")).strip().lower()
-            targets = body.get("targets", "second-brain")
-            question = str(body.get("question", ""))
-            if mode == "ask_files":
-                self._send_json(ask_jev_files(targets, body.get("questions") or question))
-            elif mode == "pick_first":
-                cands = targets if isinstance(targets, list) else [t.strip() for t in str(targets).split(",") if t.strip()]
-                self._send_json(pick_first_file([str(x) for x in cands], question))
-            elif mode == "scout":
-                self._send_json(scout_and_pick(targets, question))
-            else:
-                self._send_json({"error": "Unsupported multi-file mode"}, 400)
-        elif self.path == "/api/jev-agentic":
-            from hud.jev_agentic import ask_jev, triage_failure, judge_diff, gate_plan
-            mode = str(body.get("mode", "default")).strip().lower()
-            state = body.get("state")
-            paths = body.get("paths")
-            command = body.get("command")
-            questions = body.get("questions")
-            if mode == "triage":
-                self._send_json(triage_failure(state or "execution_failure", command=command, candidate_paths=paths))
-            elif mode == "judge_diff":
-                self._send_json(judge_diff(str(state or ""), target_files=paths))
-            elif mode == "gate_plan":
-                self._send_json(gate_plan(str(state or ""), target_paths=paths))
-            else:
-                self._send_json(ask_jev(state=state, paths=paths, command=command, questions=questions))
-        elif self.path == "/api/jev-composite-score":
-            from hud.jev_composite_gate import evaluate_composite_score
-            self._send_json(evaluate_composite_score(
-                target_kind=str(body.get("target_kind", "gtm_outreach")),
-                target_data=body.get("target_data"),
-                weights_override=body.get("weights"),
-            ))
-        elif self.path == "/api/jev-confidence-gate":
-            from hud.jev_composite_gate import evaluate_confidence_gate
-            self._send_json(evaluate_confidence_gate(
-                action_type=str(body.get("action_type", "bash_gate")),
-                command_or_target=str(body.get("target") or body.get("command") or "ls -la"),
-                context=body.get("context"),
-            ))
-        elif self.path == "/api/jev-e2e":
-            from hud.jev_e2e_pipeline import run_e2e_invoice_to_gtm_pipeline
-            self._send_json(run_e2e_invoice_to_gtm_pipeline(
-                invoice_fixture=str(body.get("invoice_fixture", "adversarial_fixture.csv")),
-                stage_to_outbox=bool(body.get("stage_to_outbox", True)),
-            ))
-        elif self.path == "/api/cortex/auto-accept":
-            global _CORTEX_AUTO_ACCEPT
-            if isinstance(body, dict) and "enabled" in body:
-                _CORTEX_AUTO_ACCEPT = bool(body["enabled"])
-            else:
-                _CORTEX_AUTO_ACCEPT = not _CORTEX_AUTO_ACCEPT
-            notify_telemetry_event()
-            self._send_json({"status": "ok", "auto_accept_enabled": _CORTEX_AUTO_ACCEPT})
-        elif self.path == "/api/memory/task/complete":
-            from hud.shared_memory import get_shared_memory_store
-            store = get_shared_memory_store()
-            rec = store.record_task_completion(
-                agent_id=str(body.get("agent_id", "sub-agent")),
-                task_id=str(body.get("task_id", f"task-sstm-{int(time.time()*1000)}")),
-                task_type=str(body.get("task_type", "general")),
-                status=str(body.get("status", "completed")),
-                input_summary=body.get("input_summary", {}),
-                output_summary=body.get("output_summary", {}),
-                artifacts=body.get("artifacts", []),
-                duration_ms=float(body.get("duration_ms", 0.0)),
-                sync_vault_now=bool(body.get("sync_vault_now", True))
-            )
-            notify_telemetry_event()
-            self._send_json({"status": "recorded", "task": rec.to_dict()})
-        elif self.path == "/api/memory/agent/heartbeat":
-            from hud.shared_memory import get_shared_memory_store
-            store = get_shared_memory_store()
-            ag = store.update_agent_heartbeat(
-                agent_id=str(body.get("agent_id", "sub-agent")),
-                role=body.get("role"),
-                operational_state=str(body.get("operational_state", "idle")),
-                current_task_id=body.get("current_task_id"),
-                capabilities=body.get("capabilities"),
-                meta=body.get("meta")
-            )
-            notify_telemetry_event()
-            self._send_json({"status": "updated", "agent": ag.to_dict()})
-        elif self.path == "/api/memory/blackboard":
-            from hud.shared_memory import get_shared_memory_store
-            store = get_shared_memory_store()
-            entry = store.set_blackboard_key(
-                key=str(body.get("key", "")),
-                value=body.get("value"),
-                writer_agent_id=str(body.get("writer_agent_id", "operator")),
-                ttl_seconds=float(body["ttl_seconds"]) if body.get("ttl_seconds") is not None else None
-            )
-            notify_telemetry_event()
-            self._send_json({"status": "set", "entry": entry.to_dict()})
-        elif self.path == "/api/memory/sync-obsidian":
-            from hud.shared_memory import get_shared_memory_store
-            store = get_shared_memory_store()
-            res = store.sync_to_obsidian_vault()
-            notify_telemetry_event()
-            self._send_json(res)
-        elif self.path.startswith("/api/gateway/"):
-            from hud.gateway import (
-                verify_gateway_request, GatewayAuthError,
-                execute_gateway_rpc, execute_task_command,
-                load_cron_registry, update_cron_job, trigger_cron_job, delete_cron_job,
-                send_signed_rpc
-            )
-            start_t = time.monotonic()
-            idemp_key = self.headers.get("X-Idempotency-Key") or body.get("idempotency_key")
-            if idemp_key and "idempotency_key" not in body:
-                body["idempotency_key"] = idemp_key
-
-            # Inbound Hermes Webhook / RPC Callback requires strict signature verification
-            if self.path == "/api/gateway/hermes":
-                try:
-                    verify_gateway_request(dict(self.headers), "POST", self.path, raw_body)
-                except GatewayAuthError as gae:
-                    self._send_json({
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32000, "message": f"Unauthorized: {gae}"},
-                        "status": "unauthorized"
-                    }, 401)
-                    return
-                method = body.get("method", "")
-                params = body.get("params", {})
-                req_id = body.get("id")
-                if idemp_key and "idempotency_key" not in params:
-                    params["idempotency_key"] = idemp_key
-                rpc_res = execute_gateway_rpc(method, params)
-                notify_telemetry_event()
-                rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
-                ack = rpc_res.get("ack")
-                out = {
-                    "jsonrpc": "2.0",
-                    "id": req_id,
-                    "result": rpc_res.get("result"),
-                    "error": rpc_res.get("error"),
-                    "status": "error" if rpc_res.get("error") else "ok",
-                    "ack": ack,
-                    "round_trip_ms": rtt_ms
-                }
-                status_code = 400 if rpc_res.get("error") else 200
-                ack_id = ack.get("ack_id") if ack else None
-                seq_id = ack.get("sequence_id") if ack else None
-                self._send_json(out, status_code, ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
-                return
-
-            elif self.path == "/api/gateway/tasks":
-                cmd = body.get("command") or body.get("cmd", "ping")
-                params = body.get("params", body)
-                if idemp_key and "idempotency_key" not in params:
-                    params["idempotency_key"] = idemp_key
-                dispatch_remote = bool(body.get("remote", False))
-
-                if dispatch_remote:
-                    res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.task.execute", {"command": cmd, **params}, idempotency_key=idemp_key)
-                    notify_telemetry_event()
-                    ack = res.get("ack")
-                    ack_id = ack.get("ack_id") if isinstance(ack, dict) else None
-                    seq_id = ack.get("sequence_id") if isinstance(ack, dict) else None
-                    rtt_ms = res.get("round_trip_ms")
-                    try:
-                        from hud.shared_memory import get_shared_memory_store
-                        get_shared_memory_store().record_task_completion(
-                            agent_id="agent-hermes-gateway",
-                            task_id=f"task-hermes-{seq_id or int(time.time()*1000)}",
-                            task_type=cmd,
-                            status="completed" if not res.get("error") else "failed",
-                            input_summary={"command": cmd, "remote": True},
-                            output_summary={"result": str(res.get("result", res))[:200]},
-                            duration_ms=float(rtt_ms or 0.0)
-                        )
-                    except Exception:
-                        pass
-                    self._send_json(res, ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
-                else:
-                    task_res = execute_task_command(cmd, params)
-                    notify_telemetry_event()
-                    rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
-                    ack = task_res.get("ack")
-                    ack_id = ack.get("ack_id") if isinstance(ack, dict) else None
-                    seq_id = ack.get("sequence_id") if isinstance(ack, dict) else None
-                    try:
-                        from hud.shared_memory import get_shared_memory_store
-                        get_shared_memory_store().record_task_completion(
-                            agent_id="agent-supervisor",
-                            task_id=f"task-local-{seq_id or int(time.time()*1000)}",
-                            task_type=cmd,
-                            status="completed" if not task_res.get("error") else "failed",
-                            input_summary={"command": cmd, "remote": False},
-                            output_summary={"result": str(task_res.get("result", task_res))[:200]},
-                            duration_ms=float(rtt_ms or 0.0)
-                        )
-                    except Exception:
-                        pass
-                    self._send_json({"status": "ok", "task": task_res, "ack": ack, "round_trip_ms": rtt_ms},
-                                    ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
-                return
-
-            elif self.path == "/api/gateway/crons":
-                action = body.get("action", "update")
-                cron_id = body.get("id") or body.get("cron_id") or body.get("job_id")
-                try:
-                    if action == "trigger":
-                        dispatch_remote = bool(body.get("remote", False))
-                        if dispatch_remote:
-                            res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.cron.trigger", {"id": cron_id}, idempotency_key=idemp_key)
-                            notify_telemetry_event()
-                            self._send_json(res)
-                        else:
-                            outcome = trigger_cron_job(cron_id)
-                            notify_telemetry_event()
-                            rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
-                            seq_id = outcome.get("sequence_id")
-                            self._send_json({"status": "ok", "triggered": outcome, "round_trip_ms": rtt_ms}, seq_id=seq_id, rtt_ms=rtt_ms)
-                    elif action == "delete":
-                        del_ok = delete_cron_job(cron_id)
-                        notify_telemetry_event()
-                        rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
-                        self._send_json({"status": "ok" if del_ok else "not_found", "deleted": del_ok, "round_trip_ms": rtt_ms}, rtt_ms=rtt_ms)
-                    else:
-                        upd = update_cron_job(cron_id, body)
-                        notify_telemetry_event()
-                        rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
-                        seq_id = upd.get("sequence_id")
-                        self._send_json({"status": "ok", "cron": upd, "round_trip_ms": rtt_ms}, seq_id=seq_id, rtt_ms=rtt_ms)
-                except Exception as err:
-                    self._send_json({"error": str(err), "status": "error"}, 400)
-                return
-
-            elif self.path == "/api/gateway/board/sync":
-                dispatch_remote = bool(body.get("remote", False))
-                if idemp_key and "idempotency_key" not in body:
-                    body["idempotency_key"] = idemp_key
-                if dispatch_remote:
-                    res = send_signed_rpc(get_hermes_gateway_rpc_url(), "hermes.board.sync", body, idempotency_key=idemp_key)
-                    notify_telemetry_event()
-                    ack = res.get("ack")
-                    ack_id = ack.get("ack_id") if isinstance(ack, dict) else None
-                    seq_id = ack.get("sequence_id") if isinstance(ack, dict) else None
-                    rtt_ms = res.get("round_trip_ms")
-                    self._send_json(res, ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
-                else:
-                    rpc_res = execute_gateway_rpc("hermes.board.sync", body)
-                    notify_telemetry_event()
-                    rtt_ms = round((time.monotonic() - start_t) * 1000, 2)
-                    ack = rpc_res.get("ack")
-                    ack_id = ack.get("ack_id") if isinstance(ack, dict) else None
-                    seq_id = ack.get("sequence_id") if isinstance(ack, dict) else None
-                    out = rpc_res.get("result", rpc_res)
-                    if isinstance(out, dict):
-                        out["round_trip_ms"] = rtt_ms
-                        if ack:
-                            out["ack"] = ack
-                    self._send_json(out, ack_id=ack_id, seq_id=seq_id, rtt_ms=rtt_ms)
-                return
-
-            self._send_json({"error": "Unknown gateway endpoint"}, 404)
-            return
-        else:
-            self._send_json({"error": "Unknown endpoint"}, 404)
+            self.wfile.flush()
+        except OSError:
+            pass
 
 class HUDHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = os.name != "nt"

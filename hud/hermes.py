@@ -1,7 +1,9 @@
 import threading
 import time
 import urllib.request
+from typing import Any, Dict
 
+from inference_adapter import LiveLocalModelAdapter, get_default_adapter
 from .ledger import snapshot
 from .storage import loads, utcnow
 
@@ -12,27 +14,26 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 class HermesProbe:
-    def __init__(self):
+    """Telemetry and health probe for Hermes runtime, delegating to inference_adapter."""
+
+    def __init__(self, adapter: LiveLocalModelAdapter = None):
         self.lock = threading.Lock()
-        self.state = {'connected': False, 'state': 'standby', 'models': [], 'checked_at': None}
+        self.adapter = adapter or get_default_adapter()
+        self.state: Dict[str, Any] = {'connected': False, 'state': 'standby', 'models': [], 'checked_at': None}
 
     def probe(self):
         started = time.monotonic()
-        result = {'connected': False, 'state': 'standby', 'models': [], 'checked_at': utcnow()}
-        try:
-            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-            with opener.open('http://127.0.0.1:8080/v1/models', timeout=1.5) as response:
-                raw = response.read(65537)
-                if len(raw) > 65536:
-                    raise ValueError('Model response exceeds bound')
-                data = loads(raw)
-            ids = [item['id'] for item in data['data'] if isinstance(item, dict) and isinstance(item.get('id'), str)]
-            result.update(connected=True, state='connected', models=ids[:10])
-        except Exception as exc:
-            result['error'] = type(exc).__name__
-        result['latency_ms'] = str(round((time.monotonic() - started) * 1000))
+        h = self.adapter.health(probe_live=True)
         with self.lock:
-            self.state = result
+            self.state = {
+                'connected': h.reachable,
+                'state': h.state,
+                'models': h.models[:10],
+                'checked_at': utcnow(),
+                'latency_ms': str(h.get('latency_ms', '0')),
+            }
+            if not h.reachable:
+                self.state['error'] = h.get('live_probe_detail', 'Offline')
 
     def run(self, stop):
         while not stop.is_set():

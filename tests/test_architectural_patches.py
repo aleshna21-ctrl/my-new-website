@@ -235,5 +235,85 @@ class TestAssignmentsNodeRouting(unittest.TestCase):
         self.assertEqual(frame["nodes"]["assignments"]["triggers"], ["aios-directed", "operator-directed", "event-driven"])
 
 
+class TestAIOSGTMOutreachMigration(unittest.TestCase):
+    """
+    Rigorously tests:
+    1. AIOS GTM Governance: 04_AIOS_GTM_OUTREACH.md is a Ring 1 child of [[00_AIOS_ROOT]].
+    2. Dedicated Client Nodes: Markdown files generated for all prospects (e.g., Cambridge Specialty Company, Apex Thermal Solutions).
+    3. Contextual Mapping: Extracted data includes vertical, problem context, ERP systems, and financial leakage.
+    4. Execution Routing: Direct links to 04_AIOS_GTM_OUTREACH and outbound edge to [[modules/hermes-delegation.md|Hermes Delegation]].
+    """
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.vault_path = Path(self.temp_dir.name) / "vault"
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def test_gtm_governance_node_and_root_linkage(self):
+        from migrate_gtm_research import execute_gtm_migration
+
+        res = execute_gtm_migration(self.vault_path)
+        self.assertEqual(res["status"], "success")
+        self.assertGreaterEqual(res["prospects_count"], 9)
+
+        # 1. AIOS GTM Governance Node
+        gtm_node = self.vault_path / "04_AIOS_GTM_OUTREACH.md"
+        self.assertTrue(gtm_node.exists(), "04_AIOS_GTM_OUTREACH.md must exist")
+        gtm_text = gtm_node.read_text(encoding="utf-8")
+        self.assertIn("parent: \"[[00_AIOS_ROOT]]\"", gtm_text)
+        self.assertIn("ring: 1", gtm_text)
+        self.assertIn("[[modules/hermes-delegation.md|Hermes Delegation]]", gtm_text)
+
+        # Check AIOS Root link
+        root_node = self.vault_path / "00_AIOS_ROOT.md"
+        if root_node.exists():
+            root_text = root_node.read_text(encoding="utf-8")
+            self.assertIn("[[04_AIOS_GTM_OUTREACH", root_text)
+
+    def test_dedicated_client_nodes_contextual_mapping_and_routing(self):
+        from migrate_gtm_research import execute_gtm_migration
+
+        res = execute_gtm_migration(self.vault_path)
+        gtm_dir = self.vault_path / "gtm"
+        self.assertTrue(gtm_dir.exists())
+
+        # Test Cambridge Specialty Company
+        cambridge_file = gtm_dir / "Cambridge-Specialty-Company.md"
+        self.assertTrue(cambridge_file.exists(), "Cambridge Specialty Company node must exist")
+        c_text = cambridge_file.read_text(encoding="utf-8")
+        self.assertIn("parent: \"[[04_AIOS_GTM_OUTREACH]]\"", c_text)
+        self.assertIn("Precision Manufacturing / B2B", c_text)
+        self.assertIn("JobBOSS", c_text)
+        self.assertIn("QuickBooks", c_text)
+        self.assertIn("Manual data reconciliation", c_text)
+        self.assertIn("Month-end close labor drag", c_text)
+        self.assertIn("[[modules/hermes-delegation.md|Hermes Delegation]]", c_text)
+        self.assertIn("Level 4", c_text)
+
+        # Test Apex Thermal Solutions
+        apex_file = gtm_dir / "Apex-Thermal-Solutions.md"
+        self.assertTrue(apex_file.exists(), "Apex Thermal Solutions node must exist")
+        a_text = apex_file.read_text(encoding="utf-8")
+        self.assertIn("parent: \"[[04_AIOS_GTM_OUTREACH]]\"", a_text)
+        self.assertIn("Commercial Refrigeration/HVAC", a_text)
+        self.assertIn("ServiceTitan", a_text)
+        self.assertIn("QuickBooks Enterprise", a_text)
+        self.assertIn("vendor core credits", a_text)
+        self.assertIn("[[modules/hermes-delegation.md|Hermes Delegation]]", a_text)
+
+    def test_dashboard_visualizer_gtm_wiring(self):
+        # Verify OBSIDIAN_NOTES includes gtm-outreach
+        gtm_notes = [n for n in OBSIDIAN_NOTES if n["id"] == "gtm-outreach"]
+        self.assertEqual(len(gtm_notes), 1)
+        self.assertEqual(gtm_notes[0]["ring"], 1)
+
+        # Verify OBSIDIAN_LINKS
+        link_pairs = {(src, dst) for src, dst, _, _, _ in OBSIDIAN_LINKS}
+        self.assertIn(("aios-root", "gtm-outreach"), link_pairs)
+        self.assertIn(("gtm-outreach", "hermes-delegation"), link_pairs)
+
+
 if __name__ == "__main__":
     unittest.main()

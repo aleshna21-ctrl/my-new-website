@@ -210,6 +210,7 @@ All five active execution agents and daemon services are wired directly to this 
 graph TD
     ROOT["🌐 AIOS Root Node (Ring 0)"]
     ROOT --> CORE["📘 [[core.md|core.md (Ring 1 Child)]]"]
+    ROOT --> GTM["🎯 [[04_AIOS_GTM_OUTREACH|GTM Outreach & Research]]"]
     ROOT --> AG1["🛠️ [[agents/JEV-PowerShell-Patcher]]"]
     ROOT --> AG2["⏱️ [[agents/cron]]"]
     ROOT --> AG3["🧹 [[agents/maintain-daemon]]"]
@@ -232,6 +233,7 @@ graph TD
 ## 2. Core Routing & Operational Ledgers
 
 - **Assignment Routing Engine:** [[03_AIOS_ASSIGNMENTS]] *(Direct bridge between Kanban orchestrator, SQLite ledger, and educate)*
+- **GTM Outreach & Research Engine:** [[04_AIOS_GTM_OUTREACH]] *(Autonomous B2B pipeline, dedicated client research nodes, Hermes email drafting)*
 - **Operational State & Blackboard:** [[00_AIOS_OPERATIONAL_STATE]] *(Thread-safe shared short-term memory & cross-agent blackboard)*
 - **Completed Tasks Ledger:** [[01_AIOS_COMPLETED_TASKS_LOG]] *(Monotonic audit log of recent sub-agent executions)*
 - **Cross-Agent Blackboard:** [[02_AIOS_CROSS_AGENT_BLACKBOARD]] *(Ephemeral key-value working memory)*
@@ -651,6 +653,16 @@ All research and execution agents reference standardized educational procedures 
         assignments_content = self.render_assignments_node_markdown(stats, kanban, now_iso)
         assignments_path.write_text(assignments_content, encoding="utf-8")
         written_files.append(str(assignments_path))
+
+        # 4. GTM Outreach & Dedicated Client Nodes
+        try:
+            from migrate_gtm_research import execute_gtm_migration
+            gtm_res = execute_gtm_migration(self.vault_dir)
+            for f in gtm_res.get("written_files", []):
+                if f not in written_files:
+                    written_files.append(f)
+        except Exception:
+            pass
 
         # If primary vault exists and is different from local vault, mirror files
         if PRIMARY_VAULT_DIR.exists() and PRIMARY_VAULT_DIR.is_dir() and PRIMARY_VAULT_DIR != self.vault_dir:

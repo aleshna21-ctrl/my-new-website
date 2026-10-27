@@ -1,10 +1,10 @@
 ---
 title: "AIOS Multi-Agent Shared Short-Term Memory // Operational State"
 type: "aios-operational-state"
-updated_at: "2026-10-26T18:51:20.843815+00:00"
+updated_at: "2026-10-27T09:53:57.484182+00:00"
 status: "ONLINE"
 active_agents: 10
-completed_tasks: 50
+completed_tasks: 125
 tags:
   - aios
   - multi-agent
@@ -16,16 +16,16 @@ tags:
 
 > **Shared Short-Term Memory Protocol (SSTM)** provides thread-safe, monotonic cross-agent state synchronization, ephemeral working memory blackboard, and automated documentation mirroring across the operational pipeline.
 
-**Last Sync:** `2026-10-26T18:51:20.843815+00:00` · **Epoch:** `#51` · **Active Sub-Agents:** `10` · **Completed Tasks:** `50`
+**Last Sync:** `2026-10-27T09:53:57.484182+00:00` · **Epoch:** `#126` · **Active Sub-Agents:** `10` · **Completed Tasks:** `125`
 
 ## 1. Sub-Agent Operational Roster
 
 | Agent ID | Role | State | Current Task | Capabilities | Last Heartbeat |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| `agent-supervisor` | **multi_agent_coordinator** | `IDLE` | `—` | orchestration, consensus, state_transition | 2026-10-26 18:51:05 |
-| `agent-hermes-gateway` | **rpc_gateway** | `IDLE` | `—` | hmac_sha256, anti_replay_nonce, json_rpc_2_0 | 2026-10-26 18:51:20 |
-| `agent-diagnostic-probe` | **health_probe** | `IDLE` | `—` | network_probe, rtt_telemetry | 2026-10-26 18:51:20 |
-| `agent-invoice-ingestion` | **diode_ingestion** | `IDLE` | `—` | csv_cleanse, strict_str_money, zero_loss | 2026-10-26 18:07:32 |
+| `agent-supervisor` | **multi_agent_coordinator** | `IDLE` | `—` | orchestration, consensus, state_transition | 2026-10-27 09:53:29 |
+| `agent-hermes-gateway` | **rpc_gateway** | `IDLE` | `—` | hmac_sha256, anti_replay_nonce, json_rpc_2_0 | 2026-10-27 09:53:57 |
+| `agent-diagnostic-probe` | **health_probe** | `IDLE` | `—` | network_probe, rtt_telemetry | 2026-10-27 09:53:57 |
+| `agent-invoice-ingestion` | **diode_ingestion** | `IDLE` | `—` | csv_cleanse, strict_str_money, zero_loss | 2026-10-27 09:53:56 |
 | `agent-sow-worker` | **pipeline_worker** | `IDLE` | `—` | risk_extraction, sow_validation, semantic_scout | 2026-10-26 07:28:54 |
 | `agent-quarantine-guard` | **invariant_auditor** | `IDLE` | `—` | penny_reconciliation, auto_recovery, diode_seal | 2026-10-26 07:28:54 |
 | `agent-hermes-model-adapter` | **model_adapter** | `ACTIVE` | `—` | vram_locked_keep_alive, bounded_schema_repair, loopback_8080 | 2026-10-26 18:48:31 |
@@ -42,42 +42,42 @@ tags:
 | `hermes_model_readiness` | `QWEN3:4B_LOCAL_READY` | `agent-hermes-gateway` | `v1` | 2026-10-26 07:28:54 |
 | `obsidian_vault_sync_mode` | `BIDIRECTIONAL_AUTO` | `agent-supervisor` | `v1` | 2026-10-26 07:28:54 |
 | `latest_ledger_snapshot` | `LEDGER_IN_SYNC` | `agent-supervisor` | `v1` | 2026-10-26 07:28:54 |
-| `test_http_key` | `{'status': 'all_subagents_nominal'}` | `agent-supervisor` | `v14` | 2026-10-26 18:51:20 |
-| `test_pipeline_flag` | `STAGE_2_EXTRACTION` | `agent-sow-worker` | `v26` | 2026-10-26 18:07:32 |
+| `test_http_key` | `{'status': 'all_subagents_nominal'}` | `agent-supervisor` | `v32` | 2026-10-27 09:53:57 |
+| `test_pipeline_flag` | `STAGE_2_EXTRACTION` | `agent-sow-worker` | `v64` | 2026-10-27 09:53:56 |
 
 ## 3. Recent Completed Sub-Agent Tasks
 
-### ✅ `http-task-1793040680698` :: model_inference
-- **Agent:** `agent-hermes-gateway` · **Status:** `COMPLETED` · **Duration:** `42.5ms` · **Timestamp:** `2026-10-26 18:51:20`
+### ✅ `http-task-1793094837131` :: model_inference
+- **Agent:** `agent-hermes-gateway` · **Status:** `COMPLETED` · **Duration:** `42.5ms` · **Timestamp:** `2026-10-27 09:53:57`
 - **Output Summary:** `{"model": "qwen3:4b", "status": "ok"}`
 
-### ✅ `task-local-6` :: ping
-- **Agent:** `agent-supervisor` · **Status:** `COMPLETED` · **Duration:** `15.0ms` · **Timestamp:** `2026-10-26 18:51:05`
-- **Output Summary:** `{"result": "{'message': 'pong', 'service': 'hermes-aios-gateway', 'timestamp': '2026-10-26T18:51:05.403944+00:00'}"}`
-
 ### ✅ `test-probe-task-001` :: telemetry_audit
-- **Agent:** `agent-diagnostic-probe` · **Status:** `COMPLETED` · **Duration:** `1.4ms` · **Timestamp:** `2026-10-26 18:07:32`
+- **Agent:** `agent-diagnostic-probe` · **Status:** `COMPLETED` · **Duration:** `1.4ms` · **Timestamp:** `2026-10-27 09:53:56`
 - **Artifacts:** `scratch/test_probe.json`
 - **Output Summary:** `{"latency_ms": 1.45, "status": "optimal"}`
 
 ### ✅ `task-inv-999` :: csv_cleanse
-- **Agent:** `agent-invoice-ingestion` · **Status:** `COMPLETED` · **Duration:** `0.0ms` · **Timestamp:** `2026-10-26 18:07:32`
+- **Agent:** `agent-invoice-ingestion` · **Status:** `COMPLETED` · **Duration:** `0.0ms` · **Timestamp:** `2026-10-27 09:53:56`
 
-### ✅ `http-task-1793038051980` :: model_inference
-- **Agent:** `agent-hermes-gateway` · **Status:** `COMPLETED` · **Duration:** `42.5ms` · **Timestamp:** `2026-10-26 18:07:31`
+### ✅ `task-local-15` :: ping
+- **Agent:** `agent-supervisor` · **Status:** `COMPLETED` · **Duration:** `32.0ms` · **Timestamp:** `2026-10-27 09:53:29`
+- **Output Summary:** `{"result": "{'message': 'pong', 'service': 'hermes-aios-gateway', 'timestamp': '2026-10-27T09:53:29.585042+00:00'}"}`
+
+### ✅ `http-task-1793070541803` :: model_inference
+- **Agent:** `agent-hermes-gateway` · **Status:** `COMPLETED` · **Duration:** `42.5ms` · **Timestamp:** `2026-10-27 03:09:01`
 - **Output Summary:** `{"model": "qwen3:4b", "status": "ok"}`
 
-### ✅ `task-local-6` :: ping
-- **Agent:** `agent-supervisor` · **Status:** `COMPLETED` · **Duration:** `16.0ms` · **Timestamp:** `2026-10-26 18:07:16`
-- **Output Summary:** `{"result": "{'message': 'pong', 'service': 'hermes-aios-gateway', 'timestamp': '2026-10-26T18:07:16.471537+00:00'}"}`
-
 ### ✅ `test-probe-task-001` :: telemetry_audit
-- **Agent:** `agent-diagnostic-probe` · **Status:** `COMPLETED` · **Duration:** `1.4ms` · **Timestamp:** `2026-10-26 17:06:26`
+- **Agent:** `agent-diagnostic-probe` · **Status:** `COMPLETED` · **Duration:** `1.4ms` · **Timestamp:** `2026-10-27 03:09:01`
 - **Artifacts:** `scratch/test_probe.json`
 - **Output Summary:** `{"latency_ms": 1.45, "status": "optimal"}`
 
 ### ✅ `task-inv-999` :: csv_cleanse
-- **Agent:** `agent-invoice-ingestion` · **Status:** `COMPLETED` · **Duration:** `0.0ms` · **Timestamp:** `2026-10-26 17:06:25`
+- **Agent:** `agent-invoice-ingestion` · **Status:** `COMPLETED` · **Duration:** `0.0ms` · **Timestamp:** `2026-10-27 03:09:01`
+
+### ✅ `task-local-15` :: ping
+- **Agent:** `agent-supervisor` · **Status:** `COMPLETED` · **Duration:** `16.0ms` · **Timestamp:** `2026-10-27 03:08:35`
+- **Output Summary:** `{"result": "{'message': 'pong', 'service': 'hermes-aios-gateway', 'timestamp': '2026-10-27T03:08:35.412030+00:00'}"}`
 
 ## 4. Cross-Agent Context & Knowledge Links
 

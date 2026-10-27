@@ -14,9 +14,11 @@ import time
 import uuid
 import sqlite3
 import threading
+import inspect
+from dataclasses import dataclass, field
 from collections import deque
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, Tuple, Callable, Type
+from typing import Dict, Any, List, Optional, Tuple, Callable, Type, Union, Iterator
 from pydantic import BaseModel, ValidationError
 
 import sys
@@ -406,17 +408,74 @@ class RealTimeVisualizationEngine:
 # Type-Safe API Router & Microservice Communication Bus
 # --------------------------------------------------------------------------- #
 
+# --------------------------------------------------------------------------- #
+# Deep Route Dispatch Models & Contracts
+# --------------------------------------------------------------------------- #
+
+@dataclass
+class HTTPRequest:
+    """
+    Standard in-process representation of an incoming HTTP request.
+    Decoupled from underlying network sockets to enable pure in-memory testing.
+    """
+    path: str
+    method: str = "GET"
+    headers: Dict[str, str] = field(default_factory=dict)
+    query: Dict[str, List[str]] = field(default_factory=dict)
+    body: Any = None
+    raw_body: bytes = b""
+
+
+class HTTPResponse:
+    """
+    Unified response object from the deep dispatch module.
+    Encapsulates status code, headers, and body payload (JSON dict, raw text, raw bytes, or stream generator).
+    Transparently unpackable as a 3-tuple: payload, status_code, headers = response.
+    """
+    def __init__(self, status_code: int = 200, headers: Optional[Dict[str, str]] = None,
+                 payload: Any = None, body: Any = None, content_type: Optional[str] = None):
+        self.status_code = status_code
+        self.headers: Dict[str, str] = headers.copy() if headers else {}
+        self.payload = payload if payload is not None else body
+        self.body = self.payload
+        if content_type:
+            self.headers["Content-Type"] = content_type
+        elif "Content-Type" not in self.headers:
+            if isinstance(self.body, (dict, list)):
+                self.headers["Content-Type"] = "application/json; charset=utf-8"
+            elif isinstance(self.body, str):
+                self.headers["Content-Type"] = "text/html; charset=utf-8" if self.body.strip().startswith("<") else "text/plain; charset=utf-8"
+            elif isinstance(self.body, bytes):
+                self.headers["Content-Type"] = "application/octet-stream"
+
+    @property
+    def is_stream(self) -> bool:
+        return hasattr(self.body, "__next__") and not isinstance(self.body, (bytes, str, list, dict))
+
+    def json(self) -> Any:
+        return self.payload if isinstance(self.payload, (dict, list)) else {}
+
+    def __iter__(self):
+        """Allows direct unpacking for backward-compatible tests: `payload, status, headers = response`."""
+        return iter((self.payload, self.status_code, self.headers))
+
+    def __repr__(self) -> str:
+        return f"<HTTPResponse status={self.status_code} is_stream={self.is_stream}>"
+
+
 class RouteDefinition:
     def __init__(self, path: str, method: str, handler: Callable,
                  request_model: Optional[Type[BaseModel]] = None,
                  response_model: Optional[Type[BaseModel]] = None,
-                 service: str = "aios-hud-server"):
+                 service: str = "aios-hud-server",
+                 is_prefix: bool = False):
         self.path = path
         self.method = method.upper()
         self.handler = handler
         self.request_model = request_model
         self.response_model = response_model
         self.service = service
+        self.is_prefix = is_prefix or path.endswith("/*")
 
 
 class TypeSafeRouter:
@@ -432,7 +491,8 @@ class TypeSafeRouter:
     def register(self, path: str, method: str, handler: Callable,
                  request_model: Optional[Type[BaseModel]] = None,
                  response_model: Optional[Type[BaseModel]] = None,
-                 service: str = "aios-hud-server"):
+                 service: str = "aios-hud-server",
+                 is_prefix: bool = False):
         key = (path, method.upper())
         self._routes[key] = RouteDefinition(
             path=path,
@@ -440,80 +500,141 @@ class TypeSafeRouter:
             handler=handler,
             request_model=request_model,
             response_model=response_model,
-            service=service
+            service=service,
+            is_prefix=is_prefix
         )
 
-    def dispatch(self, path: str, method: str, headers: Dict[str, str],
-                 body: Optional[Dict[str, Any]] = None,
-                 query: Optional[Dict[str, List[str]]] = None) -> Tuple[Dict[str, Any], int, Dict[str, str]]:
-        key = (path, method.upper())
+    def dispatch(self, req_or_path: Union[HTTPRequest, str],
+                 method: Optional[str] = None,
+                 headers: Optional[Dict[str, str]] = None,
+                 body: Optional[Any] = None,
+                 query: Optional[Dict[str, List[str]]] = None) -> HTTPResponse:
+        """
+        Dispatches an HTTP request across the pure in-process seam.
+        Supports both modern HTTPRequest object calls and legacy positional argument calls.
+        Returns an HTTPResponse that also transparently unpacks as (payload, status_code, headers).
+        """
+        if isinstance(req_or_path, HTTPRequest):
+            req = req_or_path
+        else:
+            req = HTTPRequest(
+                path=req_or_path,
+                method=(method or "GET").upper(),
+                headers=headers or {},
+                body=body,
+                query=query or {}
+            )
+
+        # 0. Fast-path CORS OPTIONS preflight negotiation
+        if req.method == "OPTIONS":
+            cors_headers = {
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD",
+                "Access-Control-Allow-Headers": "Content-Type, Authorization, traceparent, X-Gateway-Timestamp, X-Gateway-Nonce, X-Gateway-Signature, X-Idempotency-Key",
+                "Access-Control-Max-Age": "86400"
+            }
+            return HTTPResponse(status_code=200, headers=cors_headers, payload={"status": "ok"})
+
+        key = (req.path, req.method)
         route = self._routes.get(key)
         if not route:
-            # Check dynamic prefix match if registered
+            # Check prefix / wildcard matches
             for (p, m), r in self._routes.items():
-                if m == method.upper() and p.endswith("/*") and path.startswith(p[:-2]):
-                    route = r
-                    break
+                if m == req.method:
+                    if r.is_prefix and (req.path.startswith(p[:-1]) if p.endswith("*") else req.path.startswith(p)):
+                        route = r
+                        break
 
-        traceparent_raw = headers.get("traceparent") or headers.get("Traceparent")
+        traceparent_raw = req.headers.get("traceparent") or req.headers.get("Traceparent")
         trace_id, parent_span_id = self.observability.parse_traceparent(traceparent_raw)
 
         if not route:
-            with self.observability.start_span(f"HTTP {method} {path} [404]", method=method,
+            with self.observability.start_span(f"HTTP {req.method} {req.path} [404]", method=req.method,
                                                trace_id=trace_id, parent_span_id=parent_span_id) as span:
                 span.set_status(404)
                 resp_headers = {
                     "Content-Type": "application/json; charset=utf-8",
+                    "Access-Control-Allow-Origin": "*",
                     "X-Encore-Trace-ID": span.trace_id,
                     "X-Encore-Span-ID": span.span_id,
                     "traceparent": span.traceparent
                 }
-                return {"error": f"Endpoint not found: {method} {path}", "status": "not_found"}, 404, resp_headers
+                return HTTPResponse(
+                    status_code=404,
+                    headers=resp_headers,
+                    payload={"error": f"Endpoint not found: {req.method} {req.path}", "status": "not_found"}
+                )
 
         with self.observability.start_span(f"API {route.method} {route.path}", method=route.method,
                                            trace_id=trace_id, parent_span_id=parent_span_id) as span:
             span.add_attribute("service", route.service)
-            span.add_attribute("path", path)
+            span.add_attribute("path", req.path)
 
             # 1. Type-Safe Request Validation
             validated_req = None
             if route.request_model:
                 try:
-                    payload_to_validate = body if body is not None else {}
+                    payload_to_validate = req.body if req.body is not None else {}
                     validated_req = route.request_model.model_validate(payload_to_validate)
                 except ValidationError as ve:
                     span.set_status(400)
                     span.add_attribute("validation_errors", ve.errors())
                     resp_headers = {
                         "Content-Type": "application/json; charset=utf-8",
+                        "Access-Control-Allow-Origin": "*",
                         "X-Encore-Trace-ID": span.trace_id,
                         "X-Encore-Span-ID": span.span_id,
                         "traceparent": span.traceparent
                     }
-                    return {
-                        "error": "Request validation failed",
-                        "details": ve.errors(),
-                        "status": "validation_error"
-                    }, 400, resp_headers
+                    return HTTPResponse(
+                        status_code=400,
+                        headers=resp_headers,
+                        payload={
+                            "error": "Request validation failed",
+                            "details": ve.errors(),
+                            "status": "validation_error"
+                        }
+                    )
 
             # 2. Handler Execution with Trace Context
             try:
-                kwargs: Dict[str, Any] = {"trace_id": span.trace_id, "span": span}
+                kwargs: Dict[str, Any] = {
+                    "trace_id": span.trace_id,
+                    "span": span,
+                    "request": req,
+                    "path": req.path
+                }
                 if validated_req is not None:
                     kwargs["request_data"] = validated_req
-                elif body is not None:
-                    kwargs["body"] = body
-                if query is not None:
-                    kwargs["query"] = query
+                elif req.body is not None:
+                    kwargs["body"] = req.body
+                if req.query:
+                    kwargs["query"] = req.query
+                if req.headers:
+                    kwargs["headers"] = req.headers
 
-                # Execute handler
-                result = route.handler(**kwargs)
+                sig = inspect.signature(route.handler)
+                has_var_keyword = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+                if not has_var_keyword:
+                    call_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
+                else:
+                    call_kwargs = kwargs
+
+                result = route.handler(**call_kwargs)
 
                 # 3. Response Validation / Normalization
+                if isinstance(result, HTTPResponse):
+                    result.headers.setdefault("Access-Control-Allow-Origin", "*")
+                    result.headers["X-Encore-Trace-ID"] = span.trace_id
+                    result.headers["X-Encore-Span-ID"] = span.span_id
+                    result.headers["traceparent"] = span.traceparent
+                    result.headers["X-Encore-Service"] = route.service
+                    span.set_status(result.status_code)
+                    return result
+
                 if route.response_model and isinstance(result, BaseModel):
                     final_payload = result.model_dump()
                 elif route.response_model and isinstance(result, dict):
-                    # Validate against model
                     model_obj = route.response_model.model_validate(result)
                     final_payload = model_obj.model_dump()
                 elif isinstance(result, BaseModel):
@@ -524,24 +645,30 @@ class TypeSafeRouter:
                 span.set_status(200)
                 resp_headers = {
                     "Content-Type": "application/json; charset=utf-8",
+                    "Access-Control-Allow-Origin": "*",
                     "X-Encore-Trace-ID": span.trace_id,
                     "X-Encore-Span-ID": span.span_id,
                     "traceparent": span.traceparent,
                     "X-Encore-Service": route.service
                 }
-                return final_payload, 200, resp_headers
+                return HTTPResponse(status_code=200, headers=resp_headers, payload=final_payload)
 
             except Exception as exc:
                 span.set_status(500)
                 resp_headers = {
                     "Content-Type": "application/json; charset=utf-8",
+                    "Access-Control-Allow-Origin": "*",
                     "X-Encore-Trace-ID": span.trace_id,
                     "X-Encore-Span-ID": span.span_id,
                     "traceparent": span.traceparent
                 }
-                return {
-                    "error": str(exc),
-                    "error_type": type(exc).__name__,
-                    "trace_id": span.trace_id,
-                    "status": "internal_error"
-                }, 500, resp_headers
+                return HTTPResponse(
+                    status_code=500,
+                    headers=resp_headers,
+                    payload={
+                        "error": str(exc),
+                        "error_type": type(exc).__name__,
+                        "trace_id": span.trace_id,
+                        "status": "internal_error"
+                    }
+                )

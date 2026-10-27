@@ -4,11 +4,11 @@ type: "aios-root-node"
 node_id: "aios-root"
 ring: 0
 status: "ONLINE"
-updated_at: "2026-10-26T18:51:20.845878+00:00"
+updated_at: "2026-10-27T09:53:57.487287+00:00"
 active_agents_count: 5
-ledger_jobs_total: 24
+ledger_jobs_total: 58
 ledger_jobs_completed: 24
-kanban_board_revision: 50
+kanban_board_revision: 88
 tags:
   - aios
   - root-node
@@ -21,7 +21,7 @@ tags:
 
 > **AIOS Root Architecture**: Primary architectural nucleus providing centralized governance, deterministic agent coordination, and direct bidirectional links across all execution agents, ledger state, and knowledge storage.
 
-**Epoch Synchronization:** `2026-10-26T18:51:20.845878+00:00` · **Architecture:** `Ring-0 AIOS` · **Ledger Status:** `24/24 Jobs Verified`
+**Epoch Synchronization:** `2026-10-27T09:53:57.487287+00:00` · **Architecture:** `Ring-0 AIOS` · **Ledger Status:** `24/58 Jobs Verified`
 
 ---
 
@@ -33,6 +33,7 @@ All five active execution agents and daemon services are wired directly to this 
 graph TD
     ROOT["🌐 AIOS Root Node (Ring 0)"]
     ROOT --> CORE["📘 [[core.md|core.md (Ring 1 Child)]]"]
+    ROOT --> GTM["🎯 [[04_AIOS_GTM_OUTREACH|GTM Outreach & Research]]"]
     ROOT --> AG1["🛠️ [[agents/JEV-PowerShell-Patcher]]"]
     ROOT --> AG2["⏱️ [[agents/cron]]"]
     ROOT --> AG3["🧹 [[agents/maintain-daemon]]"]
@@ -55,6 +56,7 @@ graph TD
 ## 2. Core Routing & Operational Ledgers
 
 - **Assignment Routing Engine:** [[03_AIOS_ASSIGNMENTS]] *(Direct bridge between Kanban orchestrator, SQLite ledger, and educate)*
+- **GTM Outreach & Research Engine:** [[04_AIOS_GTM_OUTREACH]] *(Autonomous B2B pipeline, dedicated client research nodes, Hermes email drafting)*
 - **Operational State & Blackboard:** [[00_AIOS_OPERATIONAL_STATE]] *(Thread-safe shared short-term memory & cross-agent blackboard)*
 - **Completed Tasks Ledger:** [[01_AIOS_COMPLETED_TASKS_LOG]] *(Monotonic audit log of recent sub-agent executions)*
 - **Cross-Agent Blackboard:** [[02_AIOS_CROSS_AGENT_BLACKBOARD]] *(Ephemeral key-value working memory)*
@@ -65,22 +67,26 @@ graph TD
 ## 3. Live SQLite `job_ledger.db` Metrics
 
 - **Database Path:** `C:\Users\alesh\jev-workspace\delivery-offline\job_ledger.db`
-- **Total Ledger Jobs:** `24`
+- **Total Ledger Jobs:** `58`
 - **Completed:** `24` · **Running:** `0` · **Validated:** `0` · **Approved:** `0` · **Quarantined:** `0`
 - **Active Job Types:**
+  - `agent_task`: 4 job(s)
+  - `architecture_routing_task`: 16 job(s)
+  - `chaos_fatal_task`: 12 job(s)
   - `hermes_inference`: 1 job(s)
   - `reconciliation`: 21 job(s)
+  - `reconciliation_triage`: 2 job(s)
   - `risk_extraction`: 1 job(s)
   - `sow_discovery_pipeline`: 1 job(s)
 
 ### Recent Ledger Audit Entries
 | Job ID | Type | State | Scope | Timestamp |
 | :--- | :--- | :--- | :--- | :--- |
-| `tracer-hermes-1793040509` | `hermes_inference` | `completed` | `hermes-agent` | 2026-10-26T18:48:31 |
-| `job-hud-1792263035` | `reconciliation` | `completed` | `hud-operator-scope` | 2026-10-26T16:28:13 |
-| `job_sow_1792272864` | `sow_discovery_pipeline` | `completed` | `—` | 2026-10-26T16:28:13 |
-| `job-hud-1792967518` | `reconciliation` | `completed` | `hud-operator-scope` | 2026-10-25T22:31:58 |
-| `job-hud-1792967215` | `reconciliation` | `completed` | `hud-operator-scope` | 2026-10-25T22:26:55 |
+| `routing-test-1793094827` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-27T09:53:51 |
+| `chaos-fatal-1793094773` | `chaos_fatal_task` | `[ NEEDS_REVIEW ]` | `aios-systems-architect` | 2026-10-27T09:53:00 |
+| `routing-test-1793070532` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-27T03:08:56 |
+| `chaos-fatal-1793070480` | `chaos_fatal_task` | `[ NEEDS_REVIEW ]` | `aios-systems-architect` | 2026-10-27T03:08:06 |
+| `routing-test-1793068887` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-27T02:41:31 |
 
 ---
 *Maintained autonomously by AIOS Obsidian Root Generator.*

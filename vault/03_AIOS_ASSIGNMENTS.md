@@ -4,10 +4,10 @@ type: "aios-assignments-node"
 node_id: "aios-assignments"
 ring: 1
 status: "ACTIVE"
-updated_at: "2026-10-26T18:51:20.845878+00:00"
-kanban_revision: 50
-open_tasks_count: 48
-total_ledger_jobs: 24
+updated_at: "2026-10-27T09:53:57.487287+00:00"
+kanban_revision: 88
+open_tasks_count: 86
+total_ledger_jobs: 58
 trigger_sources:
   - aios-directed
   - operator-directed
@@ -80,7 +80,7 @@ graph LR
 
 - **Live Store:** [`data/os_board.json`](file:///c:/Users/alesh/jev-workspace/hud-interface/data/os_board.json)
 - **Board Controller:** `hud.os_dashboard.apply_board_op()` via `POST /api/os/board`
-- **Current Revision:** `50` · **Active Workload Items:** `48`
+- **Current Revision:** `88` · **Active Workload Items:** `86`
 
 ### Active Tasks in Orchestrator
 | Task ID | Title | Priority | Vital | Status | Estimate |

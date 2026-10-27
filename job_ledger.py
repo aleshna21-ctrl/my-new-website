@@ -24,19 +24,22 @@ OUTBOX_FILE = r"C:\Users\alesh\jev-workspace\notification-outbox\metadata_outbox
 if not os.path.isfile(OUTBOX_FILE):
     OUTBOX_FILE = str(BASE_DIR / "data" / "metadata_outbox.json")
 
-# Strict State Machine Transition Graph (Module 11 + Dynamic Inbox Intake)
+# Strict State Machine Transition Graph (Module 11 + Dynamic Inbox Intake + HOTL Ejection)
 VALID_TRANSITIONS: Dict[str, Set[str]] = {
-    "[ INBOX ]": {"queued", "running", "validated", "quarantined"},
-    "inbox": {"queued", "running", "validated", "quarantined"},
-    "queued": {"running", "quarantined"},
-    "running": {"validated", "quarantined"},
-    "validated": {"approved", "completed", "quarantined"},
-    "approved": {"completed", "quarantined"},
+    "[ INBOX ]": {"queued", "running", "validated", "quarantined", "[ DONE ]", "[ STAGED / REVIEW ]", "[ NEEDS_REVIEW ]"},
+    "inbox": {"queued", "running", "validated", "quarantined", "[ DONE ]", "[ STAGED / REVIEW ]", "[ NEEDS_REVIEW ]"},
+    "queued": {"running", "quarantined", "[ NEEDS_REVIEW ]"},
+    "running": {"validated", "quarantined", "[ DONE ]", "[ NEEDS_REVIEW ]"},
+    "validated": {"approved", "completed", "quarantined", "[ NEEDS_REVIEW ]"},
+    "approved": {"completed", "quarantined", "[ NEEDS_REVIEW ]"},
     "completed": set(),
+    "[ DONE ]": set(),
+    "[ STAGED / REVIEW ]": {"[ DONE ]", "[ NEEDS_REVIEW ]", "approved", "completed"},
+    "[ NEEDS_REVIEW ]": {"queued", "running", "[ INBOX ]", "[ DONE ]", "quarantined", "approved"},
     "quarantined": {"queued"}
 }
 
-NOTIFY_STATES = {"validated", "approved", "completed", "quarantined"}
+NOTIFY_STATES = {"validated", "approved", "completed", "quarantined", "[ NEEDS_REVIEW ]"}
 SAFE_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 def utc_now_iso() -> str:
@@ -68,7 +71,7 @@ def emit_sanitized_metadata_event(job_id: str, job_type: str, from_state: str, t
         "job_type": job_type,
         "from_state": from_state,
         "to_state": to_state,
-        "requires_review": to_state in {"quarantined", "validated"},
+        "requires_review": to_state in {"quarantined", "validated", "[ NEEDS_REVIEW ]"},
         "dispatched_via_smtp": False,
         "timestamp_utc": utc_now_iso()
     }
@@ -100,10 +103,44 @@ def init_db() -> None:
                 meta TEXT
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS staging_buffer (
+                buffer_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                assigned_agent TEXT NOT NULL,
+                staged_payload TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'STAGED',
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS telemetry_log (
+                log_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL,
+                assigned_role TEXT NOT NULL,
+                retry_count INTEGER NOT NULL,
+                event_type TEXT NOT NULL,
+                payload TEXT,
+                error_trace TEXT,
+                created_at TEXT NOT NULL
+            )
+        """)
+        # Ensure payload, model_output, assigned_role, and retry_count columns exist on jobs
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(jobs)")
+        existing_cols = {col[1] for col in cur.fetchall()}
+        if "payload" not in existing_cols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN payload TEXT")
+        if "model_output" not in existing_cols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN model_output TEXT")
+        if "assigned_role" not in existing_cols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN assigned_role TEXT DEFAULT 'aios-systems-architect'")
+        if "retry_count" not in existing_cols:
+            conn.execute("ALTER TABLE jobs ADD COLUMN retry_count INTEGER DEFAULT 0")
         conn.commit()
 
-def inject_inbox_job(job_id: str, scope_id: str, job_type: str, state: str = "[ INBOX ]") -> bool:
-    """Injects an intake payload into the [ INBOX ] state of the ledger assigned to an agent."""
+def stage_to_buffer(job_id: str, assigned_agent: str, staged_payload: str, status: str = "STAGED") -> bool:
+    """Stages a generated payload into staging_buffer for desktop agent pickup."""
     init_db()
     now = utc_now_iso()
     with sqlite3.connect(DB_FILE, isolation_level=None) as conn:
@@ -111,9 +148,84 @@ def inject_inbox_job(job_id: str, scope_id: str, job_type: str, state: str = "[ 
         cursor.execute("BEGIN IMMEDIATE")
         try:
             cursor.execute("""
-                INSERT OR REPLACE INTO jobs (job_id, scope_id, job_type, state, attempt_count, created_at, updated_at)
-                VALUES (?, ?, ?, ?, 0, ?, ?)
-            """, (job_id, scope_id, job_type, state, now, now))
+                INSERT OR REPLACE INTO staging_buffer (buffer_id, job_id, assigned_agent, staged_payload, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (f"buf-{job_id}", job_id, assigned_agent, staged_payload, status, now))
+            conn.execute("COMMIT")
+            return True
+        except Exception:
+            conn.execute("ROLLBACK")
+            return False
+
+def get_staging_buffer_item(job_id: str) -> Optional[dict]:
+    """Retrieves staged payload by job_id from staging_buffer table."""
+    init_db()
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM staging_buffer WHERE job_id = ?", (job_id,))
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+def log_telemetry_event(
+    job_id: str,
+    assigned_role: str,
+    retry_count: int,
+    event_type: str,
+    payload: Optional[str] = None,
+    error_trace: Optional[str] = None,
+) -> bool:
+    """Inserts a structured telemetry failure/routing event into telemetry_log."""
+    init_db()
+    now = utc_now_iso()
+    log_id = f"telem-{job_id}-{int(time.time() * 1000)}"
+    with sqlite3.connect(DB_FILE, isolation_level=None) as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        try:
+            cursor.execute("""
+                INSERT INTO telemetry_log (log_id, job_id, assigned_role, retry_count, event_type, payload, error_trace, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (log_id, job_id, assigned_role, retry_count, event_type, payload, error_trace, now))
+            conn.execute("COMMIT")
+            return True
+        except Exception:
+            conn.execute("ROLLBACK")
+            return False
+
+def get_telemetry_logs_for_job(job_id: str) -> list:
+    """Retrieves all telemetry events for a given job_id."""
+    init_db()
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM telemetry_log WHERE job_id = ? ORDER BY created_at ASC", (job_id,))
+        return [dict(r) for r in cur.fetchall()]
+
+def inject_inbox_job(
+    job_id: str,
+    scope_id: str,
+    job_type: str,
+    state: str = "[ INBOX ]",
+    payload: Optional[str] = None,
+    assigned_role: Optional[str] = None,
+    retry_count: int = 0
+) -> bool:
+    """Injects an intake payload into the [ INBOX ] state of the ledger assigned to an agent."""
+    init_db()
+    now = utc_now_iso()
+    role = assigned_role or scope_id or "aios-systems-architect"
+    with sqlite3.connect(DB_FILE, isolation_level=None) as conn:
+        cursor = conn.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        try:
+            cursor.execute("""
+                INSERT OR REPLACE INTO jobs (
+                    job_id, scope_id, job_type, state, attempt_count, created_at, updated_at,
+                    payload, assigned_role, retry_count
+                )
+                VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+            """, (job_id, scope_id, job_type, state, now, now, payload, role, retry_count))
             success = (cursor.rowcount >= 1)
             conn.execute("COMMIT")
             return success
