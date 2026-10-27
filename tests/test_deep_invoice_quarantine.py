@@ -321,6 +321,51 @@ class InvoiceQuarantineTicket03Tests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             fake.reset()
 
+    def test_parity_between_real_and_fake_auto_recover_all(self):
+        """Verifies exact behavioral parity between InvoiceQuarantine and FakeInvoiceQuarantine under auto_recover_all."""
+        import csv
+        import invoice_quarantine
+        edge_case_rows = [
+            {"InvoiceID": "INV-100", "Amount": "150.00", "Date": "2026-01-01"},
+            {"InvoiceID": "", "Amount": "-999.995", "Date": "2026-01-02"},
+            {"InvoiceID": "INV-100", "Amount": "not_a_number", "Date": "2026-01-03"},
+        ]
+
+        with tempfile.TemporaryDirectory() as td:
+            csv_file = Path(td) / "test_edge.csv"
+            with open(csv_file, "w", encoding="utf-8", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["InvoiceID", "Amount", "Date"])
+                for r in edge_case_rows:
+                    writer.writerow([r["InvoiceID"], r["Amount"], r["Date"]])
+
+            real_q = invoice_quarantine.InvoiceQuarantine(csv_path=csv_file)
+            fake_q = invoice_quarantine.FakeInvoiceQuarantine(initial_rows=edge_case_rows)
+
+            real_snap = real_q.inspect()
+            fake_snap = fake_q.inspect()
+            self.assertEqual(real_snap.metrics, fake_snap.metrics)
+            self.assertEqual(real_snap.passed, fake_snap.passed)
+
+            real_res = real_q.repair(auto_recover_all=True)
+            fake_res = fake_q.repair(auto_recover_all=True)
+
+            self.assertEqual(real_res.status, fake_res.status)
+            self.assertEqual(real_res.metrics, fake_res.metrics)
+            self.assertEqual(real_res.quarantined_count, fake_res.quarantined_count)
+            self.assertEqual(real_res.duplicates_count, fake_res.duplicates_count)
+            self.assertEqual(real_res.metrics["accepted"], 3)
+            self.assertEqual(real_res.quarantined_count, 0)
+            self.assertEqual(real_res.duplicates_count, 0)
+            self.assertTrue(real_res.invariant["passed"])
+            self.assertTrue(fake_res.invariant["passed"])
+
+            for idx in range(3):
+                self.assertEqual(real_res.rows[idx]["invoice_id"], fake_res.rows[idx]["invoice_id"])
+                self.assertEqual(real_res.rows[idx]["amount"], fake_res.rows[idx]["amount"])
+                self.assertEqual(real_res.rows[idx]["status"], fake_res.rows[idx]["status"])
+
+
 
 class InvoiceQuarantineTicket04Tests(unittest.TestCase):
     """Ticket 04: Backward-Compatible Module Delegation & Singleton Wrappers."""

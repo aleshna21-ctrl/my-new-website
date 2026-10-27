@@ -51,7 +51,7 @@ def get_default_csv_path() -> Path:
     return BASE_DIR / "data" / "adversarial_fixture.csv"
 
 
-def _atomic_write_csv(target_path: Path, header: List[str], data_rows: List[List[str]]) -> None:
+def _atomic_write(target_path: Path, writer_fn: Any) -> None:
     target_dir = target_path.parent
     target_dir.mkdir(parents=True, exist_ok=True)
     temp_file = None
@@ -65,9 +65,7 @@ def _atomic_write_csv(target_path: Path, header: List[str], data_rows: List[List
             suffix=".tmp",
             delete=False
         )
-        writer = csv.writer(temp_file)
-        writer.writerow(header)
-        writer.writerows(data_rows)
+        writer_fn(temp_file)
         temp_file.flush()
         os.fsync(temp_file.fileno())
         temp_file.close()
@@ -79,33 +77,115 @@ def _atomic_write_csv(target_path: Path, header: List[str], data_rows: List[List
             except OSError:
                 pass
         raise
+
+
+def _atomic_write_csv(target_path: Path, header: List[str], data_rows: List[List[str]]) -> None:
+    def write_csv(f):
+        writer = csv.writer(f)
+        writer.writerow(header)
+        writer.writerows(data_rows)
+    _atomic_write(target_path, write_csv)
 
 
 def _atomic_write_text(target_path: Path, content: str) -> None:
-    target_dir = target_path.parent
-    target_dir.mkdir(parents=True, exist_ok=True)
-    temp_file = None
-    try:
-        temp_file = tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            dir=str(target_dir),
-            prefix=".quarantine-",
-            suffix=".tmp",
-            delete=False
-        )
-        temp_file.write(content)
-        temp_file.flush()
-        os.fsync(temp_file.fileno())
-        temp_file.close()
-        os.replace(temp_file.name, str(target_path))
-    except Exception:
-        if temp_file is not None and os.path.exists(temp_file.name):
-            try:
-                os.remove(temp_file.name)
-            except OSError:
-                pass
-        raise
+    _atomic_write(target_path, lambda f: f.write(content))
+
+
+def _classify_invoice_row(
+    idx: int,
+    inv_id: str,
+    amt_str: str,
+    dt_str: str,
+    seen: Set[str]
+) -> Dict[str, Any]:
+    """
+    Evaluates StrictStr validation and duplicate status for a single invoice row.
+    Mutates seen set with newly accepted unique IDs.
+    """
+    inv_id = (inv_id or "").strip()
+    amt_str = (amt_str or "").strip()
+    dt_str = (dt_str or "").strip()
+
+    is_dup = inv_id in seen
+    is_malformed = False
+    reason = None
+    status = "accepted"
+
+    if is_dup:
+        status = "duplicate"
+        reason = f"Duplicate InvoiceID ({inv_id})"
+    elif not inv_id:
+        status = "quarantined"
+        is_malformed = True
+        reason = "Missing InvoiceID"
+    elif not amt_str:
+        status = "quarantined"
+        is_malformed = True
+        reason = "Missing Amount"
+    elif amt_str.startswith("-"):
+        status = "quarantined"
+        is_malformed = True
+        reason = f"Negative StrictStr amount ({amt_str})"
+    elif not amt_str.replace(".", "", 1).isdigit():
+        status = "quarantined"
+        is_malformed = True
+        reason = f"Non-numeric amount string ({amt_str})"
+    else:
+        parts = amt_str.split(".")
+        if len(parts) == 2 and len(parts[1]) > 2:
+            status = "quarantined"
+            is_malformed = True
+            reason = f"Sub-penny fractional precision ({amt_str}, {len(parts[1])} decimal places)"
+        else:
+            seen.add(inv_id)
+            status = "accepted"
+
+    return {
+        "row_idx": idx,
+        "row": idx,
+        "invoice_id": inv_id or "MISSING",
+        "amount": amt_str,
+        "raw_amount": amt_str,
+        "date": dt_str,
+        "status": status,
+        "is_malformed": is_malformed,
+        "reason": reason
+    }
+
+
+def _clean_amount_for_recovery(amt_str: str, default: str = "0.00") -> Optional[str]:
+    """
+    Cleanses negative sign, sub-penny precision, or non-numeric amount for auto-recovery.
+    Returns cleaned amount string if modified, or None if amount is already valid.
+    """
+    amt = (amt_str or "").strip()
+    is_malformed = amt.startswith("-") or not amt.replace(".", "", 1).isdigit() or (len(amt.split(".")) == 2 and len(amt.split(".")[1]) > 2)
+    if not is_malformed:
+        return None
+    cleaned = amt.lstrip("-").strip()
+    if cleaned.replace(".", "", 1).isdigit():
+        parts = cleaned.split(".")
+        if len(parts) == 2 and len(parts[1]) > 2:
+            return f"{parts[0]}.{parts[1][:2]}"
+        elif len(parts) == 1:
+            return f"{parts[0]}.00"
+        return cleaned
+    return default
+
+
+def _deconflict_invoice_id(inv_id: str, idx: int, seen: Set[str]) -> Optional[str]:
+    """
+    Deconflicts duplicate or missing invoice IDs for auto-recovery.
+    Returns new ID if modified, or None if ID is unique and valid.
+    """
+    inv_id = (inv_id or "").strip()
+    if not inv_id:
+        return f"AUTO-REC-{idx}"
+    if inv_id in seen:
+        return f"{inv_id}-REC"
+    seen.add(inv_id)
+    return None
+
 
 
 class QuarantineInspectionSnapshot(dict):
@@ -318,63 +398,21 @@ class InvoiceQuarantine:
             for idx, raw_row in enumerate(reader, start=1):
                 clean_row = {k.strip(): (v or "").strip() for k, v in raw_row.items() if k}
                 metrics["received"] += 1
-                inv_id = clean_row.get("InvoiceID", "")
-                amt_str = clean_row.get("Amount", "")
-                dt_str = clean_row.get("Date", "")
-                is_dup = inv_id in seen
-                is_malformed = False
-                reason = None
-                status = "accepted"
-
-                if is_dup:
+                row_dict = _classify_invoice_row(
+                    idx=idx,
+                    inv_id=clean_row.get("InvoiceID", ""),
+                    amt_str=clean_row.get("Amount", ""),
+                    dt_str=clean_row.get("Date", ""),
+                    seen=seen
+                )
+                if row_dict["status"] == "accepted":
+                    metrics["accepted"] += 1
+                elif row_dict["status"] == "duplicate":
                     metrics["duplicates"] += 1
-                    status = "duplicate"
-                    reason = f"Duplicate InvoiceID ({inv_id})"
-                elif not inv_id:
+                elif row_dict["status"] == "quarantined":
                     metrics["quarantined"] += 1
-                    status = "quarantined"
-                    is_malformed = True
-                    reason = "Missing InvoiceID"
-                elif not amt_str:
-                    metrics["quarantined"] += 1
-                    status = "quarantined"
-                    is_malformed = True
-                    reason = "Missing Amount"
-                elif amt_str.startswith("-"):
-                    metrics["quarantined"] += 1
-                    status = "quarantined"
-                    is_malformed = True
-                    reason = f"Negative StrictStr amount ({amt_str})"
-                elif not amt_str.replace(".", "", 1).isdigit():
-                    metrics["quarantined"] += 1
-                    status = "quarantined"
-                    is_malformed = True
-                    reason = f"Non-numeric amount string ({amt_str})"
-                else:
-                    parts = amt_str.split(".")
-                    if len(parts) == 2 and len(parts[1]) > 2:
-                        metrics["quarantined"] += 1
-                        status = "quarantined"
-                        is_malformed = True
-                        reason = f"Sub-penny fractional precision ({amt_str}, {len(parts[1])} decimal places)"
-                    else:
-                        seen.add(inv_id)
-                        metrics["accepted"] += 1
-
-                row_dict = {
-                    "row_idx": idx,
-                    "row": idx,
-                    "invoice_id": inv_id or "MISSING",
-                    "amount": amt_str,
-                    "raw_amount": amt_str,
-                    "date": dt_str,
-                    "status": status,
-                    "is_malformed": is_malformed,
-                    "reason": reason
-                }
-                rows.append(row_dict)
-                if status == "quarantined":
                     quarantined_samples.append(row_dict)
+                rows.append(row_dict)
 
         invariant_ok = (metrics["received"] == (metrics["accepted"] + metrics["quarantined"] + metrics["duplicates"]))
         return QuarantineInspectionSnapshot(
@@ -431,23 +469,15 @@ class InvoiceQuarantine:
                 if len(r) >= 2:
                     inv = r[0].strip()
                     amt = r[1].strip()
-                    # Clean malformed/negative/sub-penny amount
-                    if amt.startswith("-") or not amt.replace(".", "", 1).isdigit() or (len(amt.split(".")) == 2 and len(amt.split(".")[1]) > 2):
-                        cleaned_amt = amt.lstrip("-").strip()
-                        if cleaned_amt.replace(".", "", 1).isdigit():
-                            parts = cleaned_amt.split(".")
-                            if len(parts) == 2 and len(parts[1]) > 2:
-                                cleaned_amt = f"{parts[0]}.{parts[1][:2]}"
-                            elif len(parts) == 1:
-                                cleaned_amt = f"{parts[0]}.00"
-                            r[1] = cleaned_amt
-                            repaired_records.append({"row_idx": idx, "invoice_id": inv, "repaired_amount": cleaned_amt})
-                    if inv in seen:
-                        fixed_inv = f"{inv}-REC"
+                    cleaned_amt = _clean_amount_for_recovery(amt, default="0.00")
+                    if cleaned_amt is not None:
+                        r[1] = cleaned_amt
+                        repaired_records.append({"row_idx": idx, "invoice_id": inv, "repaired_amount": cleaned_amt})
+                    fixed_inv = _deconflict_invoice_id(inv, idx, seen)
+                    if fixed_inv is not None:
                         r[0] = fixed_inv
+                        seen.add(fixed_inv)
                         repaired_records.append({"row_idx": idx, "repaired_invoice_id": fixed_inv})
-                    else:
-                        seen.add(inv)
         else:
             if row_idx < 1 or row_idx > len(data_rows):
                 return QuarantineRepairResult(
@@ -460,15 +490,7 @@ class InvoiceQuarantine:
             cur_amt = target_row[1].strip() if len(target_row) >= 2 else ""
 
             if auto_recover:
-                cleaned_amt = cur_amt.lstrip("-").strip()
-                if cleaned_amt.replace(".", "", 1).isdigit():
-                    parts = cleaned_amt.split(".")
-                    if len(parts) == 2 and len(parts[1]) > 2:
-                        cleaned_amt = f"{parts[0]}.{parts[1][:2]}"
-                    elif len(parts) == 1:
-                        cleaned_amt = f"{parts[0]}.00"
-                else:
-                    cleaned_amt = "0.00"
+                cleaned_amt = _clean_amount_for_recovery(cur_amt, default="0.00") or "0.00"
                 target_row[1] = cleaned_amt
                 repaired_records.append({"row_idx": row_idx, "invoice_id": cur_inv, "repaired_amount": cleaned_amt})
             else:
@@ -597,65 +619,22 @@ class FakeInvoiceQuarantine:
             amt_val = raw_row.get("Amount") if "Amount" in raw_row else raw_row.get("amount", "")
             dt_val = raw_row.get("Date") if "Date" in raw_row else raw_row.get("date", "")
 
-            inv_id = str(inv_id_val or "").strip()
-            amt_str = str(amt_val or "").strip()
-            dt_str = str(dt_val or "").strip()
-
             metrics["received"] += 1
-            is_dup = inv_id in seen
-            is_malformed = False
-            reason = None
-            status = "accepted"
-
-            if is_dup:
+            row_dict = _classify_invoice_row(
+                idx=idx,
+                inv_id=str(inv_id_val or ""),
+                amt_str=str(amt_val or ""),
+                dt_str=str(dt_val or ""),
+                seen=seen
+            )
+            if row_dict["status"] == "accepted":
+                metrics["accepted"] += 1
+            elif row_dict["status"] == "duplicate":
                 metrics["duplicates"] += 1
-                status = "duplicate"
-                reason = f"Duplicate InvoiceID ({inv_id})"
-            elif not inv_id:
+            elif row_dict["status"] == "quarantined":
                 metrics["quarantined"] += 1
-                status = "quarantined"
-                is_malformed = True
-                reason = "Missing InvoiceID"
-            elif not amt_str:
-                metrics["quarantined"] += 1
-                status = "quarantined"
-                is_malformed = True
-                reason = "Missing Amount"
-            elif amt_str.startswith("-"):
-                metrics["quarantined"] += 1
-                status = "quarantined"
-                is_malformed = True
-                reason = f"Negative StrictStr amount ({amt_str})"
-            elif not amt_str.replace(".", "", 1).isdigit():
-                metrics["quarantined"] += 1
-                status = "quarantined"
-                is_malformed = True
-                reason = f"Non-numeric amount string ({amt_str})"
-            else:
-                parts = amt_str.split(".")
-                if len(parts) == 2 and len(parts[1]) > 2:
-                    metrics["quarantined"] += 1
-                    status = "quarantined"
-                    is_malformed = True
-                    reason = f"Sub-penny fractional precision ({amt_str}, {len(parts[1])} decimal places)"
-                else:
-                    seen.add(inv_id)
-                    metrics["accepted"] += 1
-
-            row_dict = {
-                "row_idx": idx,
-                "row": idx,
-                "invoice_id": inv_id or "MISSING",
-                "amount": amt_str,
-                "raw_amount": amt_str,
-                "date": dt_str,
-                "status": status,
-                "is_malformed": is_malformed,
-                "reason": reason
-            }
-            rows.append(row_dict)
-            if status == "quarantined":
                 quarantined_samples.append(row_dict)
+            rows.append(row_dict)
 
         invariant_ok = (metrics["received"] == (metrics["accepted"] + metrics["quarantined"] + metrics["duplicates"]))
         return QuarantineInspectionSnapshot(
@@ -707,25 +686,16 @@ class FakeInvoiceQuarantine:
                 cur_inv = str(r.get(inv_key, "")).strip()
                 cur_amt = str(r.get(amt_key, "")).strip()
 
-                rep_inv = cur_inv
-                if cur_inv in seen_ids:
-                    rep_inv = f"{cur_inv}-REC"
-                if not rep_inv:
-                    rep_inv = f"AUTO-REC-{idx}"
-                seen_ids.add(rep_inv)
-                r[inv_key] = rep_inv
+                cleaned_amt = _clean_amount_for_recovery(cur_amt, default="0.00")
+                if cleaned_amt is not None:
+                    r[amt_key] = cleaned_amt
+                    repaired_records.append({"row_idx": idx, "invoice_id": cur_inv, "repaired_amount": cleaned_amt})
 
-                cleaned_amt = cur_amt.lstrip("-").strip()
-                if cleaned_amt.replace(".", "", 1).isdigit():
-                    parts = cleaned_amt.split(".")
-                    if len(parts) == 2 and len(parts[1]) > 2:
-                        cleaned_amt = f"{parts[0]}.{parts[1][:2]}"
-                    elif len(parts) == 1:
-                        cleaned_amt = f"{parts[0]}.00"
-                else:
-                    cleaned_amt = "100.00"
-                r[amt_key] = cleaned_amt
-                repaired_records.append({"row_idx": idx, "invoice_id": rep_inv, "amount": cleaned_amt})
+                fixed_inv = _deconflict_invoice_id(cur_inv, idx, seen_ids)
+                if fixed_inv is not None:
+                    r[inv_key] = fixed_inv
+                    seen_ids.add(fixed_inv)
+                    repaired_records.append({"row_idx": idx, "repaired_invoice_id": fixed_inv})
         else:
             if row_idx < 1 or row_idx > len(self._rows):
                 return QuarantineRepairResult(
@@ -742,15 +712,7 @@ class FakeInvoiceQuarantine:
             cur_amt = str(target_row.get(amt_key, "")).strip()
 
             if auto_recover:
-                cleaned_amt = cur_amt.lstrip("-").strip()
-                if cleaned_amt.replace(".", "", 1).isdigit():
-                    parts = cleaned_amt.split(".")
-                    if len(parts) == 2 and len(parts[1]) > 2:
-                        cleaned_amt = f"{parts[0]}.{parts[1][:2]}"
-                    elif len(parts) == 1:
-                        cleaned_amt = f"{parts[0]}.00"
-                else:
-                    cleaned_amt = "0.00"
+                cleaned_amt = _clean_amount_for_recovery(cur_amt, default="0.00") or "0.00"
                 target_row[amt_key] = cleaned_amt
                 repaired_records.append({"row_idx": row_idx, "invoice_id": cur_inv, "repaired_amount": cleaned_amt})
             else:
