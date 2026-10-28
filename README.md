@@ -116,5 +116,11 @@ Files are bounded at 16 MiB; oversized or malformed exports fail visibly. Event 
 ```
 
 Tests use temporary ledgers, drafts and fake SMTP. They never approve real drafts or send email. Browser verification should additionally exercise responsive layout and readable missing-source states. See `docs/specs/0001-command-center.md` for the acceptance gates.
-#   a p l h a 2  
- 
+
+---
+
+## Universal Agent & Deployment Contracts
+
+- **Universal Agent Contract**: See [CODEX.md](file:///c:/Users/alesh/jev-workspace/hud-interface/CODEX.md) for cross-platform runtime specs, API surfaces, and agent invariants (**Strictly NOT a trading bot**).
+- **Hostinger VPS Deployment**: See [DEPLOY_HOSTINGER.md](file:///c:/Users/alesh/jev-workspace/hud-interface/DEPLOY_HOSTINGER.md) for Docker Compose and SSH deployment guide.
+- **Canonical Repository Target**: [aleshna21-ctrl/my-new-website](https://github.com/aleshna21-ctrl/my-new-website) (origin/main).

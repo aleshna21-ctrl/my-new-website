@@ -32,4 +32,14 @@ _Avoid_: Event emitter, message bus, webhook
 The autonomous background orchestration engine executing multi-agent matrix pipelines, sandbox execution jails, and stalled lock recovery via the Job Ledger.
 _Avoid_: Task scheduler, cron worker, runner daemon
 
+**Hermes Agent**:
+A specialized autonomous reasoning worker orchestrated within the system matrix that dispatches inference prompts through the Hermes Adapter and logs state transitions in the Job Ledger.
+_Avoid_: AI agent, bot, worker daemon, copilot
 
+**Agent Efficacy Score**:
+A composite numerical index evaluating agent operation across inference fidelity, invariant integrity, and autonomous decision confidence.
+_Avoid_: Accuracy metric, success rate, performance score
+
+**Agent Activity Stream**:
+A real-time event pipeline emitting continuous agent thoughts, tool dispatches, and state transitions to the cockpit.
+_Avoid_: Message log, debug console, terminal feed

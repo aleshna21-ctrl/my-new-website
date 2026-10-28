@@ -38,8 +38,19 @@ DATA_DIR = Path(os.environ.get("HUD_DATA_DIR", str(HUD_ROOT / "data")))
 BOARD_PATH = DATA_DIR / "os_board.json"
 CALENDAR_DIR = Path(os.environ.get("HUD_CALENDAR_DIR", str(HUD_ROOT / "calendar")))
 SCRATCH_DIR = Path(os.environ.get("HUD_SCRATCH_DIR", str(HUD_ROOT / "scratch")))
-SECOND_BRAIN_DIR = Path(os.environ.get("SECOND_BRAIN_DIR", r"G:\My Drive\second-brain" if os.name == "nt" else str(HUD_ROOT / "vault")))
-MARK_LVI_DIR = Path(os.environ.get("MARK_LVI_DIR", r"C:\Users\alesh\Downloads\Mark-LVI-main" if os.name == "nt" else str(HUD_ROOT / "mark-lvi")))
+_DEFAULT_SECOND_BRAIN = (
+    Path(r"G:\My Drive\second-brain")
+    if Path(r"G:\My Drive\second-brain").exists()
+    else HUD_ROOT / "vault"
+)
+SECOND_BRAIN_DIR = Path(os.environ.get("SECOND_BRAIN_DIR", str(_DEFAULT_SECOND_BRAIN)))
+
+_DEFAULT_MARK_LVI = (
+    Path(r"C:\Users\alesh\Downloads\Mark-LVI-main")
+    if Path(r"C:\Users\alesh\Downloads\Mark-LVI-main").exists()
+    else HUD_ROOT / "mark-lvi"
+)
+MARK_LVI_DIR = Path(os.environ.get("MARK_LVI_DIR", str(_DEFAULT_MARK_LVI)))
 
 _BOARD_LOCK = threading.Lock()
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")

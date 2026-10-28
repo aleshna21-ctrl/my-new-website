@@ -15,7 +15,7 @@ jobs:
       - name: Setup SSH Key
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.APLHA2 }}
+          ssh-private-key: ${{ secrets.HOSTINGER_SSH_KEY || secrets.APLHA2 || secrets.SSH_PRIVATE_KEY }}
 
       - name: Run deployment script
         run: |
@@ -44,7 +44,9 @@ jobs:
           # Dynamically aggregate paths that exist locally to prevent tar stat aborts
           CANDIDATE_ITEMS=(
           "Dockerfile" "compose.yml" ".dockerignore" ".env" ".env.example" "requirements.txt"
-          "vps-backup-and-auth.sh" "hud_server.py" "app.py" "hud" "static" "config" "inbox" "plugins"
+          "vps-backup-and-auth.sh" "hud_server.py" "app.py" "index.html" "hud" "static" "config" "inbox" "plugins"
+          "data" "prototype-1-ring-command.html" "prototype-2-minimal-3d.html" "prototype-3-cockpit-split.html"
+          "prototype-4-hermes-stream.html" "prototype-5-hermes-matrix.html" "prototype-6-hermes-cockpit.html"
           )
           FILES_TO_PACK=()
           for item in "${CANDIDATE_ITEMS[@]}"; do

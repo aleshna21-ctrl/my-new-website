@@ -2,6 +2,7 @@
 import http.client
 import io
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -11,7 +12,11 @@ from unittest.mock import patch
 import urllib.error
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, r"C:\Users\alesh\jev-workspace\delivery-offline")
+OFFLINE_DIR = Path(os.environ.get("JEV_OFFLINE_DIR", str(HERE.parent.parent / "delivery-offline")))
+if OFFLINE_DIR.exists():
+    sys.path.insert(0, str(OFFLINE_DIR))
+elif Path(r"C:\Users\alesh\jev-workspace\delivery-offline").exists():
+    sys.path.insert(0, r"C:\Users\alesh\jev-workspace\delivery-offline")
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE))
 import inference_adapter as adapter

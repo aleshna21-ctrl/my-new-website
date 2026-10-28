@@ -5,7 +5,7 @@ agent_id: "agent-jev-powershell-patcher"
 role: "execution_patcher"
 parent: "[[00_AIOS_ROOT]]"
 status: "ACTIVE"
-updated_at: "2026-10-27T09:53:57.487287+00:00"
+updated_at: "2026-10-28T00:42:28.504181+00:00"
 accepted_triggers:
   - operator-directed
   - aios-directed

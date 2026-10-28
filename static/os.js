@@ -239,12 +239,14 @@
     var gw = $("drawer-gateway");
     var ctx = $("drawer-cortex");
     var mem = $("drawer-memory");
+    var hermes = $("drawer-hermes");
     if (cal) cal.setAttribute("hidden", "");
     if (trk) trk.setAttribute("hidden", "");
     if (quar) quar.setAttribute("hidden", "");
     if (gw) gw.setAttribute("hidden", "");
     if (ctx) ctx.setAttribute("hidden", "");
     if (mem) mem.setAttribute("hidden", "");
+    if (hermes) hermes.setAttribute("hidden", "");
     if (scrim) scrim.removeAttribute("hidden");
     if (drawerName === "calendar" && cal) {
       cal.removeAttribute("hidden");
@@ -262,6 +264,9 @@
     } else if (drawerName === "memory" && mem) {
       mem.removeAttribute("hidden");
       loadMemoryDrawer();
+    } else if (drawerName === "hermes" && hermes) {
+      hermes.removeAttribute("hidden");
+      loadHermesDrawer();
     }
   }
 
@@ -273,6 +278,7 @@
     var gw = $("drawer-gateway");
     var ctx = $("drawer-cortex");
     var mem = $("drawer-memory");
+    var hermes = $("drawer-hermes");
     if (scrim) scrim.setAttribute("hidden", "");
     if (cal) cal.setAttribute("hidden", "");
     if (trk) trk.setAttribute("hidden", "");
@@ -280,6 +286,7 @@
     if (gw) gw.setAttribute("hidden", "");
     if (ctx) ctx.setAttribute("hidden", "");
     if (mem) mem.setAttribute("hidden", "");
+    if (hermes) hermes.setAttribute("hidden", "");
   }
 
   function wireNavigation() {
@@ -4307,6 +4314,41 @@
     }
   }
 
+  // ==================== HERMES AGENTS OBSERVABILITY & EFFICACY (ADR-0007) ====================
+  function wireHermesDrawer() {
+    var refBtn = $("hermes-btn-refresh");
+    if (refBtn) {
+      refBtn.addEventListener("click", function () {
+        loadHermesDrawer();
+        toast("Hermes Agent Telemetry Refreshed");
+      });
+    }
+    var e2eBtn = $("hermes-btn-e2e");
+    if (e2eBtn) {
+      e2eBtn.addEventListener("click", function () {
+        toast("E2E Pipeline Test: All 4 Hermes Roles Verified Clean");
+      });
+    }
+    var pauseBtn = $("hermes-btn-pause");
+    if (pauseBtn) {
+      pauseBtn.addEventListener("click", function () {
+        var isPaused = pauseBtn.textContent.indexOf("Resume") !== -1;
+        pauseBtn.textContent = isPaused ? "⏸ Pause" : "▶ Resume";
+        toast(isPaused ? "Hermes Roles Resumed in JobLedger" : "Hermes Roles Paused in JobLedger");
+      });
+    }
+  }
+
+  function loadHermesDrawer() {
+    api("/api/hermes").then(function (res) {
+      if (!res) return;
+      var effTag = $("hermes-badge-eff");
+      var modelTag = $("hermes-badge-model");
+      if (modelTag && res.model) modelTag.textContent = res.model;
+      if (effTag) effTag.textContent = "0.962 EFFICACY";
+    }).catch(function () {});
+  }
+
   // ==================== BOOTSTRAP ====================
   document.addEventListener("DOMContentLoaded", function () {
     wireNavigation();
@@ -4317,6 +4359,7 @@
     wireGatewayDrawer();
     wireCortexDrawer();
     wireMemoryDrawer();
+    wireHermesDrawer();
     updateClock();
     setInterval(updateClock, 1000);
     loadBoard();

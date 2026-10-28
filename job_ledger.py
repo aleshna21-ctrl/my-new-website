@@ -26,9 +26,12 @@ def get_default_target_dir() -> str:
     env_dir = os.environ.get("DELIVERY_OFFLINE_DIR")
     if env_dir and os.path.isdir(env_dir):
         return env_dir
-    preferred = r"C:\Users\alesh\jev-workspace\delivery-offline"
-    if os.path.isdir(preferred):
-        return preferred
+    parent_delivery = BASE_DIR.parent / "delivery-offline"
+    if parent_delivery.is_dir():
+        return str(parent_delivery)
+    local_delivery = BASE_DIR / "delivery-offline"
+    if local_delivery.is_dir():
+        return str(local_delivery)
     return str(BASE_DIR / "data")
 
 def get_default_db_path() -> str:
@@ -45,9 +48,12 @@ def get_default_outbox_path() -> str:
     env_outbox = os.environ.get("JOB_LEDGER_OUTBOX")
     if env_outbox:
         return env_outbox
-    preferred = r"C:\Users\alesh\jev-workspace\notification-outbox\metadata_outbox.json"
-    if os.path.isfile(preferred):
-        return preferred
+    parent_outbox = BASE_DIR.parent / "notification-outbox" / "metadata_outbox.json"
+    if parent_outbox.is_file():
+        return str(parent_outbox)
+    local_outbox = BASE_DIR / "notification-outbox" / "metadata_outbox.json"
+    if local_outbox.is_file():
+        return str(local_outbox)
     return str(BASE_DIR / "data" / "metadata_outbox.json")
 
 # Module constants for backward-compatibility

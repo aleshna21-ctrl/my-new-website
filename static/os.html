@@ -28,6 +28,7 @@
       <button class="btn sm" type="button" data-drawer="gateway" id="trig-gateway">⚡ Gateway <span class="tag ok" id="trig-gw-meta">ONLINE</span></button>
       <button class="btn sm" type="button" data-drawer="cortex" id="trig-cortex">⚡ Next Cortex <span class="tag ok" id="trig-cortex-meta">100%</span></button>
       <button class="btn sm" type="button" data-drawer="memory" id="trig-memory">🧠 Shared Memory <span class="tag ok" id="trig-mem-meta">SYNCED</span></button>
+      <button class="btn sm" type="button" data-drawer="hermes" id="trig-hermes">🤖 Hermes Agents <span class="tag ok" id="trig-hermes-meta">0.96 EFF</span></button>
     </div>
     <span class="pill" id="stream-pill" title="Telemetry stream (Server-Sent Events from /api/os/stream)"><i class="led"></i><span id="stream-text">CONNECTING</span></span>
     <span class="pill mono muted" id="frame-meta">no frame yet</span>
@@ -968,6 +969,140 @@
   </div>
 </section>
 
+<!-- SECONDARY WIDGET 7: HERMES AGENTS OBSERVABILITY & EFFICACY DRAWER (HIDDEN UNTIL CLICKED) -->
+<section class="widget-drawer" id="drawer-hermes" role="dialog" aria-modal="true" aria-labelledby="hermes-drawer-title" hidden>
+  <header class="sheet-h">
+    <div class="quar-header-left">
+      <h2 id="hermes-drawer-title">🤖 Hermes Agents Observability &amp; Efficacy</h2>
+      <span class="tag ok" id="hermes-badge-eff">0.962 EFFICACY</span>
+      <span class="tag info" id="hermes-badge-roles">4 ROLES ACTIVE</span>
+      <span class="tag mono" id="hermes-badge-model">Qwen-2.5-Coder</span>
+    </div>
+    <div class="quar-header-actions">
+      <a class="btn sm" href="/prototype-6-hermes-cockpit.html" target="_blank" title="Launch Prototype VI Full Cockpit">↗ Full Cockpit</a>
+      <button class="btn sm" type="button" id="hermes-btn-refresh" title="Refresh Telemetry">↻ Refresh</button>
+      <button class="btn ghost sm" type="button" data-close-drawer aria-label="Close hermes drawer">✕</button>
+    </div>
+  </header>
+  <div class="sheet-body" id="hermes-drawer-body">
+    <!-- Status / Invariant Banner -->
+    <div class="quar-status-banner">
+      <div class="quar-banner-top">
+        <span class="quar-banner-title">Hermes Agent Matrix Architecture (ADR-0007):</span>
+        <span class="mono bold">Composite Efficacy = 0.35(Inf) + 0.35(Integ) + 0.30(Conf)</span>
+        <span class="chip-badge ok">CEILING: UNRESTRICTED</span>
+        <span class="chip-badge info">SSE TELEMETRY: ACTIVE</span>
+      </div>
+      <p class="quar-banner-sub muted">
+        Real-time multi-agent observability across Triage, Scout, Execution, and Supervisor roles. Bounded schema repair (ADR-0002) and durable JobLedger state transitions (ADR-0005) visualized in-flight.
+      </p>
+    </div>
+
+    <!-- Quick Prototype Jump Bar -->
+    <div class="quar-toolbar hermes-proto-bar">
+      <div class="hermes-proto-bar-left">
+        <span class="mono sm-txt text-cyan bold">PROTOTYPE LABS:</span>
+        <a class="btn sm" href="/prototype-4-hermes-stream.html" target="_blank">Proto IV: Stream</a>
+        <a class="btn sm" href="/prototype-5-hermes-matrix.html" target="_blank">Proto V: Topology DAG</a>
+        <a class="btn sm go" href="/prototype-6-hermes-cockpit.html" target="_blank">Proto VI: Efficacy Cockpit</a>
+      </div>
+      <div class="hermes-proto-bar-right">
+        <button class="btn sm" type="button" id="hermes-btn-e2e">⚡ Test Pipeline</button>
+        <button class="btn sm" type="button" id="hermes-btn-pause">⏸ Pause</button>
+      </div>
+    </div>
+
+    <!-- 4 Roles Cards Grid -->
+    <div class="hermes-roles-grid">
+      <div class="cortex-metric-card role-card-triage">
+        <div class="cortex-metric-title">01 // TRIAGE</div>
+        <div class="cortex-metric-val text-purple">0.980</div>
+        <div class="mono sm-txt muted">actions.ask_jev · Router</div>
+        <div class="tag ok sm role-tag-sub">PASSED (186 runs)</div>
+      </div>
+      <div class="cortex-metric-card role-card-scout">
+        <div class="cortex-metric-title">02 // SCOUT</div>
+        <div class="cortex-metric-val text-cyan">0.962</div>
+        <div class="mono sm-txt muted">jev_file_read · Zero Tokens</div>
+        <div class="tag ok sm role-tag-sub">PASSED (210 runs)</div>
+      </div>
+      <div class="cortex-metric-card role-card-exec">
+        <div class="cortex-metric-title">03 // EXECUTION</div>
+        <div class="cortex-metric-val text-emerald">0.952</div>
+        <div class="mono sm-txt muted">bash_tool · Level 6 Jail</div>
+        <div class="tag ok sm role-tag-sub">PASSED (142 runs)</div>
+      </div>
+      <div class="cortex-metric-card role-card-supervisor">
+        <div class="cortex-metric-title">04 // SUPERVISOR</div>
+        <div class="cortex-metric-val text-gold">0.974</div>
+        <div class="mono sm-txt muted">confidence_gate · Gatekeeper</div>
+        <div class="tag ok sm role-tag-sub">AUTO_EXEC (98 runs)</div>
+      </div>
+    </div>
+
+    <!-- Live Step Activities Table -->
+    <div class="cortex-panel">
+      <div class="cortex-panel-header">
+        <h4>⚡ Hermes Agent Real-Time Activity Log</h4>
+        <span class="tag info" id="hermes-act-count">RECENT 4 ACTIONS</span>
+      </div>
+      <div class="quar-table-wrap">
+        <table class="quar-table cortex-table" id="hermes-acts-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Role</th>
+              <th>Action</th>
+              <th>Thought Trace</th>
+              <th>Latency</th>
+              <th>Tokens</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="hermes-acts-tbody">
+            <tr>
+              <td class="mono sm-txt muted">09:44:02</td>
+              <td><span class="tag sm text-gold">[SUPERVISOR]</span></td>
+              <td class="mono bold sm-txt">actions.confidence_gate</td>
+              <td class="sm-txt">GTM batch outreach verified. Zero anomalies -> Decision: AUTO_EXECUTE.</td>
+              <td class="mono sm-txt">36ms</td>
+              <td class="mono sm-txt">94 tok</td>
+              <td><span class="tag ok sm">AUTO_EXEC</span></td>
+            </tr>
+            <tr>
+              <td class="mono sm-txt muted">09:43:58</td>
+              <td><span class="tag sm text-emerald">[EXEC]</span></td>
+              <td class="mono bold sm-txt">actions.bash_tool</td>
+              <td class="sm-txt">Executing verified bash command in sandboxed jail #1.</td>
+              <td class="mono sm-txt">42ms</td>
+              <td class="mono sm-txt">180 tok</td>
+              <td><span class="tag ok sm">PASSED</span></td>
+            </tr>
+            <tr>
+              <td class="mono sm-txt muted">09:43:54</td>
+              <td><span class="tag sm text-cyan">[SCOUT]</span></td>
+              <td class="mono bold sm-txt">actions.jev_file_read</td>
+              <td class="sm-txt">Checking adversarial_fixture.csv for malformed StrictStr amounts without context load.</td>
+              <td class="mono sm-txt">38ms</td>
+              <td class="mono sm-txt">88 tok</td>
+              <td><span class="tag ok sm">PASSED</span></td>
+            </tr>
+            <tr>
+              <td class="mono sm-txt muted">09:43:50</td>
+              <td><span class="tag sm text-purple">[TRIAGE]</span></td>
+              <td class="mono bold sm-txt">actions.ask_jev</td>
+              <td class="sm-txt">Classifying inbound payload against capability policy matrix.</td>
+              <td class="mono sm-txt">32ms</td>
+              <td class="mono sm-txt">142 tok</td>
+              <td><span class="tag ok sm">PASSED</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- =============== SWIPE DOTS & PERSISTENT BOTTOM DOCK =============== -->
 <div class="dots" id="dots" aria-hidden="true">
   <button class="dot active" data-go="0" tabindex="-1"></button>
@@ -984,6 +1119,7 @@
   <button class="dock-btn" type="button" data-drawer="gateway"><i>⚡</i><span>Gateway</span><b class="badge ok" id="badge-gateway" hidden></b></button>
   <button class="dock-btn" type="button" data-drawer="cortex"><i>⚡</i><span>Cortex</span><b class="badge ok" id="badge-cortex" hidden></b></button>
   <button class="dock-btn" type="button" data-drawer="memory"><i>🧠</i><span>Memory</span><b class="badge ok" id="badge-memory" hidden></b></button>
+  <button class="dock-btn" type="button" data-drawer="hermes"><i>🤖</i><span>Hermes</span><b class="badge ok" id="badge-hermes" hidden></b></button>
   <button class="dock-btn" type="button" data-sheet="alerts"><i>⚠</i><span>Alerts</span><b class="badge warn" id="badge-alerts" hidden></b></button>
   <span class="dock-sep" aria-hidden="true"></span>
   <button class="dock-btn" type="button" data-go="0"><i>◈</i><span>Obsidian</span></button>

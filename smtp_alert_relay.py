@@ -10,20 +10,17 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
 
 BASE_DIR = Path(__file__).resolve().parent
-TARGET_DIR = r"C:\Users\alesh\jev-workspace\gtm-research"
+PROJECT_ROOT = Path(os.environ.get("JEV_PROJECT_ROOT", str(BASE_DIR.parent if (BASE_DIR.parent / "notification-outbox").exists() else BASE_DIR)))
+
+TARGET_DIR = os.environ.get("GTM_RESEARCH_DIR", str(PROJECT_ROOT / "gtm-research"))
 if not os.path.isdir(TARGET_DIR):
     TARGET_DIR = str(BASE_DIR)
-else:
-    try:
-        os.chdir(TARGET_DIR)
-    except Exception:
-        pass
 
-DIODE_PATH = Path(r"C:\Users\alesh\jev-workspace\notification-outbox\metadata_outbox.json")
+DIODE_PATH = Path(os.environ.get("NOTIFICATION_OUTBOX_PATH", str(PROJECT_ROOT / "notification-outbox" / "metadata_outbox.json")))
 if not DIODE_PATH.exists():
     DIODE_PATH = BASE_DIR / "data" / "metadata_outbox.json"
 
-ARCHIVE_PATH = Path(r"C:\Users\alesh\jev-workspace\notification-outbox\metadata_outbox.archive.json")
+ARCHIVE_PATH = Path(os.environ.get("NOTIFICATION_ARCHIVE_PATH", str(PROJECT_ROOT / "notification-outbox" / "metadata_outbox.archive.json")))
 if not ARCHIVE_PATH.exists():
     ARCHIVE_PATH = BASE_DIR / "data" / "metadata_outbox.archive.json"
 

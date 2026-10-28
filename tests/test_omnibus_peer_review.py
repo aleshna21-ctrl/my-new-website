@@ -1,4 +1,7 @@
+import importlib
+import os
 import re
+import sys
 import unittest
 from pathlib import Path
 
@@ -172,15 +175,14 @@ class OmnibusPeerReviewTests(unittest.TestCase):
         self.assertIn("[DEFANGED_END]", safe_wrapped)
 
     def test_mark_lvi_bash_tool_integration_and_discovery(self):
-        import sys
-        mark_lvi = Path(r"C:\Users\alesh\Downloads\Mark-LVI-main")
+        mark_lvi = Path(os.environ.get("MARK_LVI_DIR", r"C:\Users\alesh\Downloads\Mark-LVI-main"))
         if not mark_lvi.exists():
             self.skipTest("Mark-LVI folder not present")
         if str(mark_lvi) not in sys.path:
             sys.path.insert(0, str(mark_lvi))
 
-        from core.action_loader import discover_actions
-        from core.plugin_loader import discover_plugins
+        discover_actions = importlib.import_module("core.action_loader").discover_actions
+        discover_plugins = importlib.import_module("core.plugin_loader").discover_plugins
 
         actions = discover_actions(mark_lvi / "actions", set())
         self.assertIn("bash_tool", actions.names())
@@ -189,7 +191,7 @@ class OmnibusPeerReviewTests(unittest.TestCase):
         self.assertIn("jev_terminal", plugins._plugins)
 
         # Verify execution through bash_tool action
-        from actions.bash_tool import bash_action
+        bash_action = importlib.import_module("actions.bash_tool").bash_action
 
         # Safe command execution
         res_safe = bash_action({"command": "echo jev_verified_test"})
@@ -274,16 +276,15 @@ class OmnibusPeerReviewTests(unittest.TestCase):
         self.assertEqual(outside["blocked_by"], "jev_level_6_guard")
 
     def test_mark_lvi_level_8_action_and_plugin_discovery(self):
-        import sys
-        mark_lvi = Path(r"C:\Users\alesh\Downloads\Mark-LVI-main")
+        mark_lvi = Path(os.environ.get("MARK_LVI_DIR", r"C:\Users\alesh\Downloads\Mark-LVI-main"))
         if not mark_lvi.exists():
             self.skipTest("Mark-LVI folder not present")
         if str(mark_lvi) not in sys.path:
             sys.path.insert(0, str(mark_lvi))
 
-        from core.action_loader import discover_actions
-        from core.plugin_loader import discover_plugins
-        from actions.jev_file_read import jev_file_read_action
+        discover_actions = importlib.import_module("core.action_loader").discover_actions
+        discover_plugins = importlib.import_module("core.plugin_loader").discover_plugins
+        jev_file_read_action = importlib.import_module("actions.jev_file_read").jev_file_read_action
 
         actions = discover_actions(mark_lvi / "actions", set())
         self.assertIn("jev_file_read", actions.names())
@@ -364,16 +365,15 @@ class OmnibusPeerReviewTests(unittest.TestCase):
         self.assertEqual(pick["linked_node"], "Jev Market Judgment")
 
     def test_mark_lvi_level_9_action_and_plugin_discovery(self):
-        import sys
-        mark_lvi = Path(r"C:\Users\alesh\Downloads\Mark-LVI-main")
+        mark_lvi = Path(os.environ.get("MARK_LVI_DIR", r"C:\Users\alesh\Downloads\Mark-LVI-main"))
         if not mark_lvi.exists():
             self.skipTest("Mark-LVI folder not present")
         if str(mark_lvi) not in sys.path:
             sys.path.insert(0, str(mark_lvi))
 
-        from core.action_loader import discover_actions
-        from core.plugin_loader import discover_plugins
-        from actions.jev_multi_file import jev_multi_file_action
+        discover_actions = importlib.import_module("core.action_loader").discover_actions
+        discover_plugins = importlib.import_module("core.plugin_loader").discover_plugins
+        jev_multi_file_action = importlib.import_module("actions.jev_multi_file").jev_multi_file_action
 
         actions = discover_actions(mark_lvi / "actions", set())
         self.assertIn("jev_multi_file", actions.names())
@@ -451,16 +451,15 @@ class OmnibusPeerReviewTests(unittest.TestCase):
         self.assertIn("Recursive deletion", blocked["error"])
 
     def test_mark_lvi_level_10_action_and_plugin_discovery(self):
-        import sys
-        mark_lvi = Path(r"C:\Users\alesh\Downloads\Mark-LVI-main")
+        mark_lvi = Path(os.environ.get("MARK_LVI_DIR", r"C:\Users\alesh\Downloads\Mark-LVI-main"))
         if not mark_lvi.exists():
             self.skipTest("Mark-LVI folder not present")
         if str(mark_lvi) not in sys.path:
             sys.path.insert(0, str(mark_lvi))
 
-        from core.action_loader import discover_actions
-        from core.plugin_loader import discover_plugins
-        from actions.ask_jev import ask_jev_action
+        discover_actions = importlib.import_module("core.action_loader").discover_actions
+        discover_plugins = importlib.import_module("core.plugin_loader").discover_plugins
+        ask_jev_action = importlib.import_module("actions.ask_jev").ask_jev_action
 
         actions = discover_actions(mark_lvi / "actions", set())
         self.assertIn("ask_jev", actions.names())
@@ -534,17 +533,16 @@ class OmnibusPeerReviewTests(unittest.TestCase):
         self.assertGreaterEqual(c["confidence"], 0.90)
 
     def test_mark_lvi_level_3_and_4_actions_and_plugins(self):
-        import sys
-        mark_lvi = Path(r"C:\Users\alesh\Downloads\Mark-LVI-main")
+        mark_lvi = Path(os.environ.get("MARK_LVI_DIR", r"C:\Users\alesh\Downloads\Mark-LVI-main"))
         if not mark_lvi.exists():
             self.skipTest("Mark-LVI folder not present")
         if str(mark_lvi) not in sys.path:
             sys.path.insert(0, str(mark_lvi))
 
-        from core.action_loader import discover_actions
-        from core.plugin_loader import discover_plugins
-        from actions.jev_composite_score import composite_score_action
-        from actions.jev_confidence_gate import confidence_gate_action
+        discover_actions = importlib.import_module("core.action_loader").discover_actions
+        discover_plugins = importlib.import_module("core.plugin_loader").discover_plugins
+        composite_score_action = importlib.import_module("actions.jev_composite_score").composite_score_action
+        confidence_gate_action = importlib.import_module("actions.jev_confidence_gate").confidence_gate_action
 
         actions = discover_actions(mark_lvi / "actions", set())
         self.assertIn("composite_score", actions.names())

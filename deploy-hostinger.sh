@@ -53,6 +53,7 @@ tar -czf "$BUNDLE" \
     hud_server.py \
     app.py \
     index.html \
+    prototype-*.html \
     package.json \
     inference_adapter.py \
     data_contracts.py \

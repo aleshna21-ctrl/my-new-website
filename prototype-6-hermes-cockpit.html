@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototype VI — Hermes Unified Efficacy Command Cockpit</title>
+<script src="./static/jev-omnibus.js"></script>
+<style>
+  :root {
+    --bg: #060911;
+    --panel: #0d1322;
+    --panel-alt: #111a2e;
+    --panel-hover: #16223b;
+    --border: #1e2d4a;
+    --border-bright: #2e4775;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --cyan: #38bdf8;
+    --purple: #a78bfa;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --gold: #fbbf24;
+    --mono: ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Prototype Ribbon */
+  .proto-bar {
+    background: #04060c;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-family: var(--mono);
+    flex-shrink: 0;
+    z-index: 100;
+  }
+  .proto-links { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .proto-link {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    transition: all 0.15s ease;
+  }
+  .proto-link:hover { color: #fff; border-color: var(--cyan); }
+  .proto-link.active {
+    background: rgba(251, 191, 36, 0.16);
+    color: var(--gold);
+    border-color: var(--gold);
+    font-weight: 700;
+  }
+
+  /* Cockpit Top Header */
+  header.cockpit-top {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .brand-block { display: flex; align-items: center; gap: 14px; }
+  .brand-title {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--gold);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 8px var(--gold);
+    animation: blink 1.6s infinite ease-in-out;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.85); }
+  }
+
+  .header-actions { display: flex; gap: 10px; align-items: center; }
+  .btn-cmd {
+    background: var(--panel-alt);
+    border: 1px solid var(--border-bright);
+    color: #fff;
+    padding: 5px 12px;
+    border-radius: 5px;
+    font-size: 11px;
+    font-family: var(--mono);
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+  }
+  .btn-cmd:hover { background: rgba(56, 189, 248, 0.2); border-color: var(--cyan); color: var(--cyan); }
+  .btn-cmd.gold:hover { background: rgba(251, 191, 36, 0.2); border-color: var(--gold); color: var(--gold); }
+  .btn-cmd.danger:hover { background: rgba(239, 68, 68, 0.2); border-color: var(--red); color: var(--red); }
+
+  /* Bento Grid Workspace */
+  .cockpit-grid {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 360px 1fr 340px;
+    gap: 12px;
+    padding: 12px 16px;
+    overflow: hidden;
+  }
+
+  /* Bento Box */
+  .bento-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .bento-header {
+    padding: 10px 14px;
+    background: var(--panel-alt);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    font-weight: 700;
+  }
+  .bento-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Efficacy Cards & Sparklines */
+  .efficacy-summary-box {
+    background: #080c16;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .eff-val-large {
+    font-size: 28px;
+    font-weight: 800;
+    font-family: var(--mono);
+    color: var(--gold);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .eff-pill {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--green);
+    border: 1px solid var(--green);
+  }
+
+  .role-bar-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .role-bar-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-family: var(--mono);
+  }
+  .bar-track {
+    height: 6px;
+    background: #111a2e;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+  .bar-triage { background: var(--purple); }
+  .bar-scout { background: var(--cyan); }
+  .bar-exec { background: var(--green); }
+  .bar-supervisor { background: var(--gold); }
+
+  /* Sparkline Chart Container */
+  .sparkline-box {
+    background: #080c16;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sparkline-title {
+    font-size: 10px;
+    color: var(--muted);
+    font-family: var(--mono);
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+  }
+  svg.spark-chart {
+    width: 100%;
+    height: 60px;
+    display: block;
+  }
+
+  /* Center Stream */
+  .feed-stream {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .stream-card {
+    background: #090e1a;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: all 0.15s ease;
+  }
+  .stream-card:hover {
+    border-color: var(--cyan);
+    background: #0d1424;
+  }
+  .stream-top { display: flex; justify-content: space-between; align-items: center; }
+  .stream-time { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .stream-action { font-family: var(--mono); font-size: 12px; font-weight: 700; color: #fff; }
+  .stream-thought {
+    font-size: 11px;
+    color: var(--muted);
+    background: rgba(0,0,0,0.3);
+    padding: 6px;
+    border-radius: 4px;
+    line-height: 1.4;
+    border-left: 2px solid var(--cyan);
+  }
+
+  /* Right Sentinel Panel */
+  .sentinel-box {
+    background: #080c16;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sentinel-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--cyan);
+    display: flex;
+    justify-content: space-between;
+  }
+  .sentinel-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text);
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(30, 45, 74, 0.4);
+  }
+  .sentinel-item:last-child { border-bottom: none; }
+  .tag-ok { color: var(--green); font-weight: 700; }
+  .tag-warn { color: var(--amber); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- Prototype Ribbon -->
+<div class="proto-bar">
+  <div class="proto-links">
+    <strong style="color:var(--cyan);">HUD PROTOTYPES //</strong>
+    <a href="./prototype-1-ring-command.html" class="proto-link">Prototype I: Tactical Ring</a>
+    <a href="./prototype-2-minimal-3d.html" class="proto-link">Prototype II: Spatial 3D</a>
+    <a href="./prototype-3-cockpit-split.html" class="proto-link">Prototype III: Dual Cockpit</a>
+    <a href="./prototype-4-hermes-stream.html" class="proto-link">Prototype IV: Hermes Live Stream</a>
+    <a href="./prototype-5-hermes-matrix.html" class="proto-link">Prototype V: Hermes Matrix DAG</a>
+    <a href="./prototype-6-hermes-cockpit.html" class="proto-link active">Prototype VI: Hermes Efficacy Cockpit</a>
+    <a href="./os" class="proto-link">AI OS Command Center (Full System)</a>
+  </div>
+  <div style="color:var(--gold); font-size:10.5px; font-weight:600;">
+    ★ ADR-0007 FULL OBSERVABILITY &amp; EFFICACY COCKPIT
+  </div>
+</div>
+
+<!-- Header -->
+<header class="cockpit-top">
+  <div class="brand-block">
+    <div class="pulse-dot"></div>
+    <span class="brand-title">HERMES // UNIFIED EFFICACY COMMAND COCKPIT</span>
+    <span class="pill ok" style="padding:4px 8px; border-radius:4px; font-size:10px; font-family:var(--mono);">AIOS GATEWAY: VERIFIED</span>
+  </div>
+  <div class="header-actions">
+    <button class="btn-cmd gold" id="btn-run-e2e">🚀 Run E2E Pipeline</button>
+    <button class="btn-cmd" id="btn-toggle-model">⚡ Model: Qwen-2.5-Coder</button>
+    <button class="btn-cmd" id="btn-quar-remed">🛡️ Quarantine: 0 Pending</button>
+    <button class="btn-cmd danger" id="btn-pause-all">⏸ Pause All</button>
+  </div>
+</header>
+
+<!-- Bento Grid -->
+<div class="cockpit-grid">
+
+  <!-- Bento 1: Efficacy & Roles Deck -->
+  <section class="bento-card">
+    <div class="bento-header">
+      <span style="color:var(--gold);">01 // EFFICACY INDEX &amp; ROLES</span>
+      <span style="color:var(--green); font-size:10px;">FORMULA ACTIVE</span>
+    </div>
+    <div class="bento-body">
+      <!-- Global Score -->
+      <div class="efficacy-summary-box">
+        <span style="font-size:10.5px; color:var(--muted); font-family:var(--mono); text-transform:uppercase;">Composite System Efficacy</span>
+        <div class="eff-val-large">
+          <span id="score-val">0.962</span>
+          <span class="eff-pill">HIGH FIDELITY</span>
+        </div>
+        <div style="font-size:10px; color:var(--muted); font-family:var(--mono);">
+          E = 0.35(Inf) + 0.35(Integ) + 0.30(Conf) · Quarantine Ceiling: &le; 0.40
+        </div>
+      </div>
+
+      <!-- Role Bars -->
+      <div class="role-bar-item">
+        <div class="role-bar-head">
+          <span style="color:var(--purple); font-weight:700;">[TRIAGE] actions.ask_jev</span>
+          <span>0.980</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill bar-triage" style="width: 98%;"></div></div>
+      </div>
+
+      <div class="role-bar-item">
+        <div class="role-bar-head">
+          <span style="color:var(--cyan); font-weight:700;">[SCOUT] jev_file_read</span>
+          <span>0.962</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill bar-scout" style="width: 96%;"></div></div>
+      </div>
+
+      <div class="role-bar-item">
+        <div class="role-bar-head">
+          <span style="color:var(--green); font-weight:700;">[EXEC] bash_tool / jail</span>
+          <span>0.952</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill bar-exec" style="width: 95%;"></div></div>
+      </div>
+
+      <div class="role-bar-item">
+        <div class="role-bar-head">
+          <span style="color:var(--gold); font-weight:700;">[SUPERVISOR] confidence_gate</span>
+          <span>0.974</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill bar-supervisor" style="width: 97%;"></div></div>
+      </div>
+
+      <!-- Historical Sparkline Chart -->
+      <div class="sparkline-box">
+        <div class="sparkline-title">
+          <span>10-Minute Sliding Efficacy Trend</span>
+          <span style="color:var(--green);">NO DRIFT</span>
+        </div>
+        <svg class="spark-chart" viewBox="0 0 320 60">
+          <defs>
+            <linearGradient id="grad-spark" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.3" />
+              <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.0" />
+            </linearGradient>
+          </defs>
+          <path d="M 0 50 Q 40 45, 80 48 T 160 40 T 240 42 T 320 38 L 320 60 L 0 60 Z" fill="url(#grad-spark)" />
+          <path d="M 0 50 Q 40 45, 80 48 T 160 40 T 240 42 T 320 38" fill="none" stroke="#fbbf24" stroke-width="2" />
+          <circle cx="320" cy="38" r="3.5" fill="#fbbf24" />
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bento 2: Center Live Stream -->
+  <section class="bento-card">
+    <div class="bento-header">
+      <span style="color:var(--cyan);">02 // REAL-TIME AGENT ACTIVITY &amp; THOUGHT STREAM</span>
+      <span style="color:var(--muted); font-size:10.5px;">SSE /api/os/stream</span>
+    </div>
+    <div class="bento-body">
+      <div class="feed-stream" id="center-stream">
+        <div class="stream-card">
+          <div class="stream-top">
+            <span style="color:var(--gold); font-family:var(--mono); font-size:11px; font-weight:700;">[SUPERVISOR] actions.jev_confidence_gate</span>
+            <span class="stream-time">09:44:02.110</span>
+          </div>
+          <div class="stream-thought">"GTM batch outreach verified. 0 invariant anomalies detected. Confidence 0.94 -> Decision: AUTO_EXECUTE."</div>
+          <div style="font-family:var(--mono); font-size:10.5px; color:var(--muted); display:flex; gap:10px;">
+            <span>⏱ 36ms</span>
+            <span>⚡ 94 tok</span>
+            <span>Outcome: <b style="color:var(--green);">AUTO_EXECUTE</b></span>
+          </div>
+        </div>
+
+        <div class="stream-card">
+          <div class="stream-top">
+            <span style="color:var(--green); font-family:var(--mono); font-size:11px; font-weight:700;">[EXEC] actions.bash_tool</span>
+            <span class="stream-time">09:43:58.450</span>
+          </div>
+          <div class="stream-thought">"Executing verified command under sandboxed subprocess: echo jev_verified_test. Status=done."</div>
+          <div style="font-family:var(--mono); font-size:10.5px; color:var(--muted); display:flex; gap:10px;">
+            <span>⏱ 42ms</span>
+            <span>⚡ 180 tok</span>
+            <span>Jail Guard: <b style="color:var(--green);">PASSED</b></span>
+          </div>
+        </div>
+
+        <div class="stream-card">
+          <div class="stream-top">
+            <span style="color:var(--cyan); font-family:var(--mono); font-size:11px; font-weight:700;">[SCOUT] actions.jev_file_read</span>
+            <span class="stream-time">09:43:54.120</span>
+          </div>
+          <div class="stream-thought">"Audit check: adversarial_fixture.csv analyzed for negative StrictStr amounts. Answer=True."</div>
+          <div style="font-family:var(--mono); font-size:10.5px; color:var(--muted); display:flex; gap:10px;">
+            <span>⏱ 38ms</span>
+            <span>⚡ 88 tok</span>
+            <span>Tokens to Context: <b style="color:var(--cyan);">0</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bento 3: Invariant Sentinel & Governance -->
+  <section class="bento-card">
+    <div class="bento-header">
+      <span style="color:var(--green);">03 // INVARIANT SENTINEL &amp; GOVERNANCE</span>
+      <span class="tag-ok">100% PASS</span>
+    </div>
+    <div class="bento-body">
+      <!-- Strict Financial Strings -->
+      <div class="sentinel-box">
+        <div class="sentinel-title">
+          <span>StrictStr Invariants (No Float)</span>
+          <span class="tag-ok">PROTECTED</span>
+        </div>
+        <div class="sentinel-item">
+          <span>Annual Risk Exposure</span>
+          <span style="color:var(--red); font-weight:700;">$826,920.00</span>
+        </div>
+        <div class="sentinel-item">
+          <span>Projected Savings</span>
+          <span style="color:var(--green); font-weight:700;">$702,882.00</span>
+        </div>
+        <div class="sentinel-item">
+          <span>Precision Canary</span>
+          <span style="color:var(--gold); font-size:10px;">9007199254740993.0001 USD</span>
+        </div>
+      </div>
+
+      <!-- Quarantine Sentinel -->
+      <div class="sentinel-box">
+        <div class="sentinel-title">
+          <span>Invoice Quarantine Vault</span>
+          <span class="tag-ok">0 HELD</span>
+        </div>
+        <div class="sentinel-item">
+          <span>Malformed Invoices</span>
+          <span>0</span>
+        </div>
+        <div class="sentinel-item">
+          <span>Auto-Repair Readiness</span>
+          <span class="tag-ok">ENABLED</span>
+        </div>
+        <div class="sentinel-item">
+          <span>Efficacy Cap Status</span>
+          <span class="tag-ok">UNRESTRICTED</span>
+        </div>
+      </div>
+
+      <!-- Level 6 Defanging Guardrail -->
+      <div class="sentinel-box">
+        <div class="sentinel-title">
+          <span>Level 6 Defanging &amp; Jails</span>
+          <span class="tag-ok">ACTIVE</span>
+        </div>
+        <div class="sentinel-item">
+          <span>Untrusted Boundaries</span>
+          <span>DEFANGED</span>
+        </div>
+        <div class="sentinel-item">
+          <span>Dangerous Deletions (rm -rf)</span>
+          <span style="color:var(--red); font-weight:700;">BLOCKED</span>
+        </div>
+        <div class="sentinel-item">
+          <span>Sensitive Files (.env, id_rsa)</span>
+          <span style="color:var(--red); font-weight:700;">MASKED</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  (function () {
+    let paused = false;
+
+    document.getElementById('btn-pause-all').addEventListener('click', () => {
+      paused = !paused;
+      const btn = document.getElementById('btn-pause-all');
+      btn.textContent = paused ? '▶ Resume All' : '⏸ Pause All';
+      btn.style.color = paused ? 'var(--green)' : 'var(--text)';
+    });
+
+    document.getElementById('btn-toggle-model').addEventListener('click', () => {
+      const btn = document.getElementById('btn-toggle-model');
+      if (btn.textContent.includes('Qwen')) {
+        btn.textContent = '⚡ Model: DeepSeek-R1-Distill (Fallback)';
+      } else {
+        btn.textContent = '⚡ Model: Qwen-2.5-Coder';
+      }
+    });
+
+    document.getElementById('btn-quar-remed').addEventListener('click', () => {
+      alert('Quarantine Auto-Remediation Sentinel checked: All invoice records compliant. Zero items held in quarantine.');
+    });
+
+    document.getElementById('btn-run-e2e').addEventListener('click', () => {
+      const centerStream = document.getElementById('center-stream');
+      const now = new Date().toISOString().substring(11, 23);
+      const card = document.createElement('div');
+      card.className = 'stream-card';
+      card.innerHTML = `
+        <div class="stream-top">
+          <span style="color:var(--gold); font-family:var(--mono); font-size:11px; font-weight:700;">[SUPERVISOR] E2E Pipeline Completed</span>
+          <span class="stream-time">${now}</span>
+        </div>
+        <div class="stream-thought">"E2E Pipeline triggered by operator. All 4 Hermes roles passed invariant gates. Full telemetry frame generated."</div>
+        <div style="font-family:var(--mono); font-size:10.5px; color:var(--muted); display:flex; gap:10px;">
+          <span>⏱ 118ms total</span>
+          <span>⚡ 440 tok</span>
+          <span>Efficacy: <b style="color:var(--green);">0.962 (OPTIMAL)</b></span>
+        </div>
+      `;
+      centerStream.insertBefore(card, centerStream.firstChild);
+    });
+  })();
+</script>
+
+</body>
+</html>

@@ -33,8 +33,19 @@ WORKSPACE_ROOT = Path(os.environ.get("JEV_PROJECT_ROOT", str(HUD_ROOT.parent)))
 OFFLINE_DIR = WORKSPACE_ROOT / "delivery-offline"
 GTM_DIR = WORKSPACE_ROOT / "gtm-research"
 OUTBOX_DIR = WORKSPACE_ROOT / "notification-outbox"
-SECOND_BRAIN_ROOT = Path(os.environ.get("SECOND_BRAIN_DIR", r"G:\My Drive\second-brain" if os.name == "nt" else str(HUD_ROOT / "vault")))
-MARK_LVI_ROOT = Path(os.environ.get("MARK_LVI_DIR", r"C:\Users\alesh\Downloads\Mark-LVI-main" if os.name == "nt" else str(HUD_ROOT / "mark-lvi")))
+_DEFAULT_SECOND_BRAIN = (
+    Path(r"G:\My Drive\second-brain")
+    if Path(r"G:\My Drive\second-brain").exists()
+    else HUD_ROOT / "vault"
+)
+SECOND_BRAIN_ROOT = Path(os.environ.get("SECOND_BRAIN_DIR", str(_DEFAULT_SECOND_BRAIN)))
+
+_DEFAULT_MARK_LVI = (
+    Path(r"C:\Users\alesh\Downloads\Mark-LVI-main")
+    if Path(r"C:\Users\alesh\Downloads\Mark-LVI-main").exists()
+    else HUD_ROOT / "mark-lvi"
+)
+MARK_LVI_ROOT = Path(os.environ.get("MARK_LVI_DIR", str(_DEFAULT_MARK_LVI)))
 
 STATE_DIR = Path(os.environ.get("HUD_STATE_DIR", str(HUD_ROOT / "state")))
 CHEAP_READ_LOG = STATE_DIR / "cheap_read_events.json"
@@ -45,6 +56,10 @@ ALLOWED_ROOTS = [
     SECOND_BRAIN_ROOT,
     MARK_LVI_ROOT,
 ]
+if (HUD_ROOT / "vault").exists() and (HUD_ROOT / "vault") not in ALLOWED_ROOTS:
+    ALLOWED_ROOTS.append(HUD_ROOT / "vault")
+if Path(r"G:\My Drive\second-brain").exists() and Path(r"G:\My Drive\second-brain") not in ALLOWED_ROOTS:
+    ALLOWED_ROOTS.append(Path(r"G:\My Drive\second-brain"))
 
 # Sensitive file patterns blocked by Level 6 Write/Read Gate
 BLOCKED_FILE_PATTERNS = (

@@ -14,6 +14,7 @@ from hud.routes.gateway_routes import register_gateway_routes
 from hud.routes.quarantine_routes import register_quarantine_routes
 from hud.routes.os_routes import register_os_routes
 from hud.routes.ledger_routes import register_ledger_routes
+from hud.routes.stream_routes import register_stream_routes
 
 
 def register_all_routes(router: TypeSafeRouter, provider: Any):
@@ -26,3 +27,4 @@ def register_all_routes(router: TypeSafeRouter, provider: Any):
     register_quarantine_routes(router, provider)
     register_os_routes(router, provider)
     register_ledger_routes(router, provider)
+    register_stream_routes(router, provider)

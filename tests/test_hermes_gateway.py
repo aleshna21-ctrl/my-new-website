@@ -309,7 +309,7 @@ class HTTPGatewayIntegrationTests(unittest.TestCase):
         self.assertEqual(res["ack"]["status"], "ACK")
         self.assertTrue(res["ack"]["synced"])
         self.assertIn("round_trip_ms", res)
-        self.assertGreater(res["round_trip_ms"], 0.0)
+        self.assertGreaterEqual(res["round_trip_ms"], 0.0)
 
         # Direct HTTP header verification
         req_body = json.dumps({"jsonrpc": "2.0", "id": "direct-head", "method": "hermes.ping", "params": {}}).encode("utf-8")

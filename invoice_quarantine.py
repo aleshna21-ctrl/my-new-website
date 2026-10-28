@@ -45,9 +45,12 @@ def get_default_csv_path() -> Path:
     env_dir = os.environ.get("DELIVERY_OFFLINE_DIR")
     if env_dir and (Path(env_dir) / "adversarial_fixture.csv").exists():
         return Path(env_dir) / "adversarial_fixture.csv"
-    preferred = Path(r"C:\Users\alesh\jev-workspace\delivery-offline\adversarial_fixture.csv")
-    if preferred.exists():
-        return preferred
+    parent_fixture = BASE_DIR.parent / "delivery-offline" / "adversarial_fixture.csv"
+    if parent_fixture.exists():
+        return parent_fixture
+    local_fixture = BASE_DIR / "delivery-offline" / "adversarial_fixture.csv"
+    if local_fixture.exists():
+        return local_fixture
     return BASE_DIR / "data" / "adversarial_fixture.csv"
 
 

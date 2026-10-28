@@ -1949,7 +1949,7 @@ details.goal-item[open] > summary {
 .th-inv { width: 140px; }
 .th-amt { width: 110px; }
 .th-date { width: 110px; }
-.th-status { }
+.th-status { width: auto; }
 .th-act { width: 170px; text-align: right; }
 .quar-actions-cell { text-align: right; }
 .quar-autofix-btn { margin-left: 6px; }
@@ -2046,7 +2046,7 @@ details.goal-item[open] > summary {
 .th-gw-status { width: 95px; }
 .th-gw-dur { width: 85px; }
 .th-gw-time { width: 155px; }
-.th-gw-out { }
+.th-gw-out { width: auto; }
 
 /* ==================== NEXT CORTEX DASHBOARD ==================== */
 .cortex-metrics-grid {
@@ -2424,5 +2424,36 @@ details.goal-item[open] > summary {
   gap: 10px;
   padding-top: 6px;
 }
+
+/* ==================== HERMES AGENTS DRAWER (ADR-0007) ==================== */
+.hermes-proto-bar {
+  background: #090e1a;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.hermes-proto-bar-left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.hermes-proto-bar-right {
+  display: flex;
+  gap: 6px;
+}
+.hermes-roles-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.role-card-triage { border-top: 3px solid var(--purple); }
+.role-card-scout { border-top: 3px solid var(--cyan); }
+.role-card-exec { border-top: 3px solid var(--emerald); }
+.role-card-supervisor { border-top: 3px solid var(--gold); }
+.role-tag-sub { margin-top: 6px; }
 
 

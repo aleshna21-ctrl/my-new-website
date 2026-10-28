@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototype IV — Hermes Live Activity Stream &amp; Telemetry Inspector</title>
+<script src="./static/jev-omnibus.js"></script>
+<style>
+  :root {
+    --bg: #060911;
+    --panel: #0d1322;
+    --panel-alt: #111a2e;
+    --panel-hover: #16223b;
+    --border: #1e2d4a;
+    --border-bright: #2e4775;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --cyan: #38bdf8;
+    --purple: #a78bfa;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --mono: ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Prototype Ribbon */
+  .proto-bar {
+    background: #04060c;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-family: var(--mono);
+    flex-shrink: 0;
+    z-index: 100;
+  }
+  .proto-links { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .proto-link {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    transition: all 0.15s ease;
+  }
+  .proto-link:hover { color: #fff; border-color: var(--cyan); }
+  .proto-link.active {
+    background: rgba(56, 189, 248, 0.16);
+    color: #fff;
+    border-color: var(--cyan);
+    font-weight: 600;
+  }
+
+  /* Main Top Header */
+  header.hud-top {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .brand-block { display: flex; align-items: center; gap: 14px; }
+  .brand-title {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--cyan);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+    animation: blink 1.6s infinite ease-in-out;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.85); }
+  }
+
+  .telemetry-pills { display: flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: 11px; }
+  .pill {
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .pill.ok { color: var(--green); border-color: rgba(16,185,129,0.35); }
+  .pill.info { color: var(--cyan); border-color: rgba(56,189,248,0.35); }
+  .pill.warn { color: var(--amber); border-color: rgba(245,158,11,0.35); }
+  .pill.err { color: var(--red); border-color: rgba(239,68,68,0.35); }
+
+  /* Metrics Deck */
+  .metrics-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    padding: 12px 18px;
+    background: #080c16;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .metric-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    transition: border-color 0.15s ease;
+  }
+  .metric-card:hover { border-color: var(--border-bright); }
+  .metric-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; display: flex; justify-content: space-between; }
+  .metric-val { font-size: 20px; font-weight: 700; font-family: var(--mono); color: #fff; }
+  .metric-val.green { color: var(--green); }
+  .metric-val.cyan { color: var(--cyan); }
+  .metric-val.amber { color: var(--amber); }
+  .metric-sub { font-size: 10.5px; color: var(--muted); font-family: var(--mono); }
+
+  /* Toolbar */
+  .stream-toolbar {
+    padding: 8px 18px;
+    background: var(--panel-alt);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .filter-group { display: flex; gap: 6px; align-items: center; }
+  .btn-filter {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: var(--mono);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-filter:hover { color: #fff; border-color: var(--cyan); }
+  .btn-filter.active { background: rgba(56, 189, 248, 0.15); color: var(--cyan); border-color: var(--cyan); font-weight: 600; }
+  .action-group { display: flex; gap: 8px; }
+  .btn-act {
+    background: var(--panel);
+    border: 1px solid var(--border-bright);
+    color: var(--text);
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-family: var(--mono);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s ease;
+  }
+  .btn-act:hover { background: rgba(56, 189, 248, 0.2); border-color: var(--cyan); color: #fff; }
+  .btn-act.danger:hover { background: rgba(239, 68, 68, 0.2); border-color: var(--red); color: var(--red); }
+
+  /* Main Workspace Split */
+  .stream-workspace {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 440px;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  /* Left: Stream Feed */
+  .feed-pane {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #070a14;
+  }
+  .feed-header {
+    padding: 8px 14px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+  .feed-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .feed-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    animation: fadeIn 0.25s ease-out;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .feed-card:hover { border-color: var(--cyan); background: var(--panel-hover); }
+  .feed-card.selected { border-color: var(--cyan); background: rgba(56, 189, 248, 0.08); box-shadow: inset 3px 0 0 var(--cyan); }
+  .feed-card.repaired { box-shadow: inset 3px 0 0 var(--amber); }
+  .feed-card.quarantined { box-shadow: inset 3px 0 0 var(--red); }
+
+  .card-top { display: flex; justify-content: space-between; align-items: center; }
+  .badge-role {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+  }
+  .badge-triage { background: rgba(167, 139, 250, 0.2); color: var(--purple); border: 1px solid rgba(167, 139, 250, 0.4); }
+  .badge-scout { background: rgba(56, 189, 248, 0.2); color: var(--cyan); border: 1px solid rgba(56, 189, 248, 0.4); }
+  .badge-exec { background: rgba(16, 185, 129, 0.2); color: var(--green); border: 1px solid rgba(16, 185, 129, 0.4); }
+  .badge-supervisor { background: rgba(245, 158, 11, 0.2); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.4); }
+
+  .card-time { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .card-action { font-family: var(--mono); font-size: 12px; font-weight: 600; color: #fff; }
+  .card-thought {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.4;
+    background: rgba(0,0,0,0.25);
+    padding: 6px 8px;
+    border-radius: 4px;
+    border-left: 2px solid var(--border-bright);
+    font-family: var(--sans);
+  }
+  .card-meta { display: flex; gap: 12px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); align-items: center; }
+
+  /* Right: Inspector Pane */
+  .inspector-pane {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--panel);
+  }
+  .inspector-head {
+    padding: 10px 14px;
+    background: var(--panel-alt);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .inspector-title { font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--cyan); }
+  .inspector-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .detail-block {
+    background: #080c16;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .detail-label { font-size: 10px; text-transform: uppercase; font-family: var(--mono); color: var(--muted); font-weight: 700; }
+  .detail-val { font-size: 12px; font-family: var(--mono); color: #fff; word-break: break-all; }
+  pre.json-view {
+    margin: 0;
+    padding: 8px;
+    background: #04060a;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: #38bdf8;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    max-height: 220px;
+  }
+  .pill-status {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .st-done { background: rgba(16,185,129,0.2); color: var(--green); border: 1px solid var(--green); }
+  .st-repaired { background: rgba(245,158,11,0.2); color: var(--amber); border: 1px solid var(--amber); }
+  .st-quarantined { background: rgba(239,68,68,0.2); color: var(--red); border: 1px solid var(--red); }
+</style>
+</head>
+<body>
+
+<!-- Prototype Ribbon -->
+<div class="proto-bar">
+  <div class="proto-links">
+    <strong style="color:var(--cyan);">HUD PROTOTYPES //</strong>
+    <a href="./prototype-1-ring-command.html" class="proto-link">Prototype I: Tactical Ring</a>
+    <a href="./prototype-2-minimal-3d.html" class="proto-link">Prototype II: Spatial 3D</a>
+    <a href="./prototype-3-cockpit-split.html" class="proto-link">Prototype III: Dual Cockpit</a>
+    <a href="./prototype-4-hermes-stream.html" class="proto-link active">Prototype IV: Hermes Live Stream</a>
+    <a href="./prototype-5-hermes-matrix.html" class="proto-link">Prototype V: Hermes Matrix DAG</a>
+    <a href="./prototype-6-hermes-cockpit.html" class="proto-link">Prototype VI: Hermes Efficacy Cockpit</a>
+    <a href="./os" class="proto-link">AI OS Command Center (Full System)</a>
+  </div>
+  <div style="color:var(--muted); font-size:10.5px;">
+    ADR-0007: Sub-second Stream · 4 Canonical Roles · Schema Provenance
+  </div>
+</div>
+
+<!-- Header -->
+<header class="hud-top">
+  <div class="brand-block">
+    <div class="pulse-dot"></div>
+    <span class="brand-title">HERMES // LIVE ACTIVITY STREAM &amp; TELEMETRY</span>
+    <span class="pill ok">SSE /api/os/stream: ONLINE</span>
+  </div>
+  <div class="telemetry-pills">
+    <span class="pill info" id="hdr-model">MODEL: Qwen-2.5-Coder (Local 8080)</span>
+    <span class="pill ok" id="hdr-seq">SEQ: #1042</span>
+    <span class="pill ok" id="hdr-ack">ACK: VALID</span>
+  </div>
+</header>
+
+<!-- Metrics Strip -->
+<div class="metrics-strip">
+  <div class="metric-card">
+    <div class="metric-lbl"><span>Inference Latency SLA</span><span class="metric-sub">&lt; 55ms target</span></div>
+    <div class="metric-val cyan" id="m-lat">39.4 ms/tok</div>
+    <div class="metric-sub">Fastest: 31.2ms · P95: 48.0ms</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-lbl"><span>Throughput Rate</span><span class="metric-sub">Token Generation</span></div>
+    <div class="metric-val green" id="m-tps">41.8 tok/s</div>
+    <div class="metric-sub">Session Tokens: 184,920</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-lbl"><span>Schema Repair Invariant</span><span class="metric-sub">ADR-0002 Seam</span></div>
+    <div class="metric-val green" id="m-repair">99.4% Clean</div>
+    <div class="metric-sub">1 repaired / 164 total runs</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-lbl"><span>Agent Efficacy Index</span><span class="metric-sub">Composite Score</span></div>
+    <div class="metric-val cyan" id="m-eff">0.962 / 1.00</div>
+    <div class="metric-sub">Inference: 0.98 · Invariant: 1.00 · Gate: 0.90</div>
+  </div>
+</div>
+
+<!-- Toolbar -->
+<div class="stream-toolbar">
+  <div class="filter-group">
+    <span style="font-size:11px; color:var(--muted); font-family:var(--mono);">ROLE:</span>
+    <button class="btn-filter active" data-filter="all">ALL</button>
+    <button class="btn-filter" data-filter="triage">TRIAGE</button>
+    <button class="btn-filter" data-filter="scout">SCOUT</button>
+    <button class="btn-filter" data-filter="exec">EXECUTION</button>
+    <button class="btn-filter" data-filter="supervisor">SUPERVISOR</button>
+  </div>
+  <div class="action-group">
+    <button class="btn-act" id="btn-inject-task">⚡ Inject Simulated Task</button>
+    <button class="btn-act" id="btn-drift">⚠️ Simulate Schema Drift</button>
+    <button class="btn-act danger" id="btn-pause">⏸ Pause Stream</button>
+  </div>
+</div>
+
+<!-- Main Split -->
+<div class="stream-workspace">
+  <!-- Feed Pane -->
+  <section class="feed-pane">
+    <div class="feed-header">
+      <span id="feed-count">BUFFER: 8 EVENTS</span>
+      <span>CLICK EVENT TO INSPECT PROVENANCE</span>
+    </div>
+    <div class="feed-list" id="feed-list">
+      <!-- Populated by JavaScript -->
+    </div>
+  </section>
+
+  <!-- Inspector Pane -->
+  <aside class="inspector-pane">
+    <div class="inspector-head">
+      <span class="inspector-title">EVENT PROVENANCE INSPECTOR</span>
+      <span class="pill-status st-done" id="insp-status">DONE</span>
+    </div>
+    <div class="inspector-body" id="inspector-body">
+      <div class="detail-block">
+        <span class="detail-label">Task Identifier</span>
+        <span class="detail-val" id="insp-task-id">task-20261027-094012</span>
+      </div>
+      <div class="detail-block">
+        <span class="detail-label">Agent Role &amp; Action</span>
+        <span class="detail-val" id="insp-role-action">[SCOUT] actions.jev_file_read</span>
+      </div>
+      <div class="detail-block">
+        <span class="detail-label">Thought Trace</span>
+        <span class="detail-val" id="insp-thought" style="color:var(--cyan);">"Inspecting adversarial_fixture.csv for malformed amounts. Level 8 boolean gate active. Invariant check: PASS."</span>
+      </div>
+      <div class="detail-block">
+        <span class="detail-label">Efficacy Score Contribution</span>
+        <div style="display:flex; justify-content:space-between; font-family:var(--mono); font-size:11px;">
+          <span>Inference: <b style="color:var(--green);">0.99</b></span>
+          <span>Integrity: <b style="color:var(--green);">1.00</b></span>
+          <span>Confidence: <b style="color:var(--cyan);">0.92</b></span>
+        </div>
+      </div>
+      <div class="detail-block">
+        <span class="detail-label">Raw Telemetry Frame (JSON)</span>
+        <pre class="json-view" id="insp-json"></pre>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script>
+  (function () {
+    const feedList = document.getElementById('feed-list');
+    let isPaused = false;
+    let currentFilter = 'all';
+    let selectedEventId = null;
+
+    const INITIAL_EVENTS = [
+      {
+        id: 'evt-101',
+        time: '09:43:12.410',
+        role: 'triage',
+        action: 'actions.ask_jev',
+        thought: 'Evaluating incoming GTM outreach batch payload against capability policy matrix.',
+        latency_ms: 32.1,
+        tokens: 142,
+        status: 'done',
+        repaired: false,
+        efficacy: 0.98,
+        payload: {
+          mode: 'triage',
+          command: 'python -c "print(\'ping\')"',
+          paths: 'capability_policy.json',
+          token_budget: 1024,
+          schema_valid: true
+        }
+      },
+      {
+        id: 'evt-102',
+        time: '09:43:14.880',
+        role: 'scout',
+        action: 'actions.jev_file_read',
+        thought: 'Reading adversarial_fixture.csv for strict decimal amounts without loading into active context.',
+        latency_ms: 38.6,
+        tokens: 88,
+        status: 'done',
+        repaired: false,
+        efficacy: 0.96,
+        payload: {
+          mode: 'bool',
+          path: 'adversarial_fixture.csv',
+          question: 'Does this CSV contain negative or malformed StrictStr amounts?',
+          tokens_added_to_context: 0,
+          answer: true
+        }
+      },
+      {
+        id: 'evt-103',
+        time: '09:43:18.120',
+        role: 'exec',
+        action: 'actions.bash_tool',
+        thought: 'Running guarded bash command under Level 6 execution jail.',
+        latency_ms: 41.2,
+        tokens: 210,
+        status: 'done',
+        repaired: false,
+        efficacy: 0.95,
+        payload: {
+          command: 'echo jev_verified_test',
+          exit_code: 0,
+          sandboxed: true,
+          level_6_guard: 'PASSED'
+        }
+      },
+      {
+        id: 'evt-104',
+        time: '09:43:22.040',
+        role: 'supervisor',
+        action: 'actions.jev_composite_score',
+        thought: 'Computing multi-factor readiness index for staged GTM outreach.',
+        latency_ms: 35.8,
+        tokens: 95,
+        status: 'done',
+        repaired: false,
+        efficacy: 0.97,
+        payload: {
+          target_kind: 'gtm_outreach',
+          readiness_index: 0.924,
+          verdict: 'APPROVED_FOR_REVIEW',
+          gate_decision: 'AUTO_EXECUTE'
+        }
+      },
+      {
+        id: 'evt-105',
+        time: '09:43:25.600',
+        role: 'scout',
+        action: 'actions.jev_multi_file',
+        thought: 'Scouting Obsidian vault graph for Fallback Supervisor role mappings across Ring 2.',
+        latency_ms: 44.5,
+        tokens: 320,
+        status: 'done',
+        repaired: false,
+        efficacy: 0.94,
+        payload: {
+          mode: 'scout',
+          targets: 'JEV_Trading_System',
+          matched_nodes: 3,
+          picked_file: 'Fallback Supervisor Role.md',
+          tokens_added: 0
+        }
+      },
+      {
+        id: 'evt-106',
+        time: '09:43:30.150',
+        role: 'exec',
+        action: 'HermesAdapter.bounded_repair',
+        thought: 'Hermes generated malformed JSON keys. Invoking bounded repair routine. Fixed on attempt 1.',
+        latency_ms: 54.0,
+        tokens: 160,
+        status: 'repaired',
+        repaired: true,
+        efficacy: 0.88,
+        payload: {
+          original_error: 'Extra trailing comma at line 4',
+          repaired: true,
+          repair_attempt: 1,
+          max_retries: 3
+        }
+      }
+    ];
+
+    let events = [...INITIAL_EVENTS];
+
+    function renderFeed() {
+      feedList.innerHTML = '';
+      const filtered = events.filter(e => currentFilter === 'all' || e.role === currentFilter);
+      document.getElementById('feed-count').textContent = `BUFFER: ${filtered.length} EVENTS`;
+
+      filtered.slice().reverse().forEach((evt) => {
+        const card = document.createElement('div');
+        card.className = `feed-card ${evt.repaired ? 'repaired' : ''} ${evt.status === 'quarantined' ? 'quarantined' : ''} ${selectedEventId === evt.id ? 'selected' : ''}`;
+        card.dataset.id = evt.id;
+
+        card.innerHTML = `
+          <div class="card-top">
+            <span class="badge-role badge-${evt.role}">[${evt.role}]</span>
+            <span class="card-time">${evt.time}</span>
+            <span class="pill-status ${evt.repaired ? 'st-repaired' : evt.status === 'quarantined' ? 'st-quarantined' : 'st-done'}">${(evt.status || 'DONE').toUpperCase()}</span>
+          </div>
+          <div class="card-action">${evt.action}</div>
+          <div class="card-thought">${evt.thought}</div>
+          <div class="card-meta">
+            <span>⏱ ${evt.latency_ms}ms</span>
+            <span>⚡ ${evt.tokens} tok</span>
+            <span>★ Efficacy: ${(Number(evt.efficacy) || 0.95).toFixed(3)}</span>
+          </div>
+        `;
+
+        card.addEventListener('click', () => selectEvent(evt));
+        feedList.appendChild(card);
+      });
+
+      if (!selectedEventId && filtered.length > 0) {
+        selectEvent(filtered[filtered.length - 1]);
+      }
+    }
+
+    function selectEvent(evt) {
+      selectedEventId = evt.id;
+      document.querySelectorAll('.feed-card').forEach(c => {
+        c.classList.toggle('selected', c.dataset.id === evt.id);
+      });
+      document.getElementById('insp-task-id').textContent = evt.id;
+      document.getElementById('insp-role-action').textContent = `[${(evt.role || '').toUpperCase()}] ${evt.action}`;
+      document.getElementById('insp-thought').textContent = `"${evt.thought}"`;
+      document.getElementById('insp-json').textContent = JSON.stringify(evt.payload || {}, null, 2);
+
+      const stEl = document.getElementById('insp-status');
+      stEl.className = `pill-status ${evt.repaired ? 'st-repaired' : evt.status === 'quarantined' ? 'st-quarantined' : 'st-done'}`;
+      stEl.textContent = (evt.status || 'DONE').toUpperCase();
+    }
+
+    async function fetchLiveActivity() {
+      try {
+        const res = await fetch(`/api/stream/events?limit=50${currentFilter !== 'all' ? '&role=' + currentFilter : ''}`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.events && data.events.length > 0) {
+          events = data.events;
+          renderFeed();
+        }
+        if (data.stats) {
+          const s = data.stats;
+          const latEl = document.getElementById('m-lat');
+          if (latEl) latEl.textContent = `${s.avg_latency_ms} ms/tok`;
+          const latSub = latEl ? latEl.nextElementSibling : null;
+          if (latSub) latSub.textContent = `Fastest: ${(s.avg_latency_ms * 0.75).toFixed(1)}ms · P95: ${s.p95_latency_ms}ms`;
+
+          const tpsEl = document.getElementById('m-tps');
+          if (tpsEl) tpsEl.textContent = `${s.tps} tok/s`;
+          const tpsSub = tpsEl ? tpsEl.nextElementSibling : null;
+          if (tpsSub) tpsSub.textContent = `Session Tokens: ${(s.total_tokens_session || 0).toLocaleString()}`;
+
+          const repEl = document.getElementById('m-repair');
+          if (repEl) repEl.textContent = `${s.clean_rate_percent}% Clean`;
+          const repSub = repEl ? repEl.nextElementSibling : null;
+          if (repSub) repSub.textContent = `${s.repaired_count} repaired / ${data.total_buffered} total runs`;
+
+          const effEl = document.getElementById('m-eff');
+          if (effEl) effEl.textContent = `${(s.efficacy_index || 0.96).toFixed(3)} / 1.00`;
+
+          const hdrModel = document.getElementById('hdr-model');
+          if (hdrModel) hdrModel.textContent = `MODEL: ${s.active_model} (${s.hermes_reachable ? 'ONLINE' : 'OFFLINE'})`;
+        }
+      } catch (err) {
+        // Fallback to local rendering
+      }
+    }
+
+    async function fetchCronKanban() {
+      try {
+        const res = await fetch('/api/cron/monitor', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.kanban_summary && data.crons_summary) {
+          const hdrSeq = document.getElementById('hdr-seq');
+          if (hdrSeq) {
+            hdrSeq.textContent = `CRONS: ${data.crons_summary.enabled}/${data.crons_summary.total} | QUEUE: ${data.kanban_summary.queue_depth}`;
+          }
+          const hdrAck = document.getElementById('hdr-ack');
+          if (hdrAck) {
+            hdrAck.textContent = `LEASES: ${data.kanban_summary.active_leases_count} ACTIVE`;
+          }
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
+
+    // Filter Buttons
+    document.querySelectorAll('.btn-filter').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.btn-filter').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.dataset.filter;
+        fetchLiveActivity();
+      });
+    });
+
+    // Control Buttons
+    document.getElementById('btn-inject-task').addEventListener('click', async () => {
+      const roles = ['triage', 'scout', 'exec', 'supervisor'];
+      const r = roles[Math.floor(Math.random() * roles.length)];
+      const now = new Date().toISOString().substring(11, 23);
+      const payload = {
+        role: r,
+        action: r === 'exec' ? 'actions.bash_tool' : r === 'scout' ? 'actions.jev_file_read' : r === 'supervisor' ? 'actions.confidence_gate' : 'actions.ask_jev',
+        thought: `Live step processed for ${r.toUpperCase()} in sandbox jail #2. Telemetry OK.`,
+        latency_ms: Number((30 + Math.random() * 20).toFixed(1)),
+        tokens: Math.floor(60 + Math.random() * 150),
+        status: 'done',
+        repaired: false,
+        efficacy: Number((0.92 + Math.random() * 0.07).toFixed(3)),
+        payload: {
+          simulated: false,
+          agent_role: r,
+          timestamp: now,
+          status: 'success'
+        }
+      };
+
+      try {
+        await fetch('/api/stream/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        await fetchLiveActivity();
+      } catch (err) {
+        events.push({ id: 'evt-' + Math.floor(100 + Math.random() * 900), time: now, ...payload });
+        renderFeed();
+      }
+    });
+
+    document.getElementById('btn-drift').addEventListener('click', async () => {
+      const now = new Date().toISOString().substring(11, 23);
+      const payload = {
+        role: 'exec',
+        action: 'HermesAdapter.bounded_repair',
+        thought: 'Schema drift detected: Key "amount_usd" missing quote marks. Bounded auto-repair resolved.',
+        latency_ms: Number((50 + Math.random() * 15).toFixed(1)),
+        tokens: 180,
+        status: 'repaired',
+        repaired: true,
+        efficacy: 0.84,
+        payload: {
+          schema_drift: true,
+          error: 'StrictStr validation warning',
+          repaired_via: 'HermesAdapter bounded repair'
+        }
+      };
+
+      try {
+        await fetch('/api/stream/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        await fetchLiveActivity();
+      } catch (err) {
+        events.push({ id: 'evt-' + Math.floor(100 + Math.random() * 900), time: now, ...payload });
+        renderFeed();
+      }
+    });
+
+    const pauseBtn = document.getElementById('btn-pause');
+    pauseBtn.addEventListener('click', () => {
+      isPaused = !isPaused;
+      pauseBtn.textContent = isPaused ? '▶ Resume Stream' : '⏸ Pause Stream';
+      pauseBtn.style.color = isPaused ? 'var(--green)' : 'var(--text)';
+    });
+
+    // Initial load and polling loop
+    fetchLiveActivity();
+    fetchCronKanban();
+
+    setInterval(() => {
+      if (!isPaused) {
+        fetchLiveActivity();
+        fetchCronKanban();
+      }
+    }, 3000);
+
+    renderFeed();
+  })();
+</script>
+
+</body>
+</html>

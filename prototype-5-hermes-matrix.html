@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototype V — Hermes Multi-Agent Interaction &amp; Topological Matrix</title>
+<script src="./static/jev-omnibus.js"></script>
+<style>
+  :root {
+    --bg: #060911;
+    --panel: #0d1322;
+    --panel-alt: #111a2e;
+    --panel-hover: #16223b;
+    --border: #1e2d4a;
+    --border-bright: #2e4775;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --cyan: #38bdf8;
+    --purple: #a78bfa;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --gold: #fbbf24;
+    --mono: ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Prototype Ribbon */
+  .proto-bar {
+    background: #04060c;
+    border-bottom: 1px solid var(--border);
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-family: var(--mono);
+    flex-shrink: 0;
+    z-index: 100;
+  }
+  .proto-links { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .proto-link {
+    color: var(--muted);
+    text-decoration: none;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    transition: all 0.15s ease;
+  }
+  .proto-link:hover { color: #fff; border-color: var(--cyan); }
+  .proto-link.active {
+    background: rgba(56, 189, 248, 0.16);
+    color: #fff;
+    border-color: var(--cyan);
+    font-weight: 600;
+  }
+
+  /* Header */
+  header.hud-top {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .brand-block { display: flex; align-items: center; gap: 14px; }
+  .brand-title {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--purple);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .pulse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--purple);
+    box-shadow: 0 0 8px var(--purple);
+    animation: blink 1.6s infinite ease-in-out;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.35; transform: scale(0.85); }
+  }
+
+  .telemetry-pills { display: flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: 11px; }
+  .pill {
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .pill.ok { color: var(--green); border-color: rgba(16,185,129,0.35); }
+  .pill.info { color: var(--cyan); border-color: rgba(56,189,248,0.35); }
+  .pill.warn { color: var(--amber); border-color: rgba(245,158,11,0.35); }
+
+  /* Workspace Layout */
+  .matrix-workspace {
+    flex: 1;
+    display: grid;
+    grid-template-rows: 1fr 240px;
+    overflow: hidden;
+  }
+
+  /* Upper Section: Topological DAG */
+  .dag-stage {
+    background: radial-gradient(circle at center, #0e1526 0%, #060911 100%);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    display: flex;
+    overflow: hidden;
+  }
+  .dag-canvas-wrap {
+    flex: 1;
+    position: relative;
+    height: 100%;
+  }
+  svg#dag-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* Node styling inside SVG */
+  .dag-node-box {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .dag-node-box:hover rect.node-bg {
+    stroke: var(--cyan);
+    stroke-width: 2px;
+    filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.4));
+  }
+  .edge-line {
+    stroke: var(--border-bright);
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+    animation: flowLine 20s linear infinite;
+  }
+  @keyframes flowLine {
+    to { stroke-dashoffset: -100; }
+  }
+  .edge-pulse {
+    fill: var(--cyan);
+    filter: drop-shadow(0 0 6px var(--cyan));
+  }
+
+  /* Side Inspector for Selected Node */
+  .node-inspector {
+    width: 360px;
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 16px;
+    gap: 12px;
+  }
+  .node-title-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  .node-name { font-family: var(--mono); font-size: 14px; font-weight: 700; color: #fff; }
+  .badge-status {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .st-active { background: rgba(16,185,129,0.2); color: var(--green); border: 1px solid var(--green); }
+  .st-idle { background: rgba(148,163,184,0.2); color: var(--muted); border: 1px solid var(--border); }
+  .st-blocked { background: rgba(239,68,68,0.2); color: var(--red); border: 1px solid var(--red); }
+
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-card {
+    background: #080c16;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+  }
+  .stat-lbl { font-size: 10px; color: var(--muted); font-family: var(--mono); text-transform: uppercase; }
+  .stat-val { font-size: 15px; font-weight: 700; font-family: var(--mono); color: #fff; margin-top: 2px; }
+
+  .action-deck { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .btn-node-act {
+    background: var(--panel-alt);
+    border: 1px solid var(--border-bright);
+    color: var(--text);
+    padding: 7px 12px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    font-family: var(--mono);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.15s ease;
+  }
+  .btn-node-act:hover { background: rgba(56, 189, 248, 0.15); border-color: var(--cyan); color: #fff; }
+  .btn-node-act.danger:hover { background: rgba(239, 68, 68, 0.2); border-color: var(--red); color: var(--red); }
+
+  /* Lower Section: Pipeline Ledger */
+  .ledger-stage {
+    background: var(--panel);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .ledger-toolbar {
+    padding: 8px 16px;
+    background: var(--panel-alt);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-family: var(--mono);
+  }
+  .ledger-table-wrap {
+    flex: 1;
+    overflow-y: auto;
+  }
+  table.matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    text-align: left;
+  }
+  table.matrix-table th {
+    background: #090e1a;
+    padding: 8px 14px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10.5px;
+  }
+  table.matrix-table td {
+    padding: 7px 14px;
+    border-bottom: 1px solid rgba(30, 45, 74, 0.4);
+    color: var(--text);
+  }
+  table.matrix-table tr:hover td {
+    background: rgba(56, 189, 248, 0.05);
+  }
+</style>
+</head>
+<body>
+
+<!-- Prototype Ribbon -->
+<div class="proto-bar">
+  <div class="proto-links">
+    <strong style="color:var(--cyan);">HUD PROTOTYPES //</strong>
+    <a href="./prototype-1-ring-command.html" class="proto-link">Prototype I: Tactical Ring</a>
+    <a href="./prototype-2-minimal-3d.html" class="proto-link">Prototype II: Spatial 3D</a>
+    <a href="./prototype-3-cockpit-split.html" class="proto-link">Prototype III: Dual Cockpit</a>
+    <a href="./prototype-4-hermes-stream.html" class="proto-link">Prototype IV: Hermes Live Stream</a>
+    <a href="./prototype-5-hermes-matrix.html" class="proto-link active">Prototype V: Hermes Matrix DAG</a>
+    <a href="./prototype-6-hermes-cockpit.html" class="proto-link">Prototype VI: Hermes Efficacy Cockpit</a>
+    <a href="./os" class="proto-link">AI OS Command Center (Full System)</a>
+  </div>
+  <div style="color:var(--muted); font-size:10.5px;">
+    ADR-0007: Multi-Agent Interaction DAG · Stalled Lock Recovery · Topology
+  </div>
+</div>
+
+<!-- Header -->
+<header class="hud-top">
+  <div class="brand-block">
+    <div class="pulse-dot"></div>
+    <span class="brand-title">HERMES // MULTI-AGENT TOPOLOGY &amp; INTERACTION MATRIX</span>
+    <span class="pill ok">TOPOLOGY: 4 ROLES ACTIVE</span>
+  </div>
+  <div class="telemetry-pills">
+    <span class="pill info">QUEUE: 0 PENDING</span>
+    <span class="pill ok">LOCK SWEEPER: 0 STALLED</span>
+    <span class="pill ok">GATEWAY: HMAC-SHA256</span>
+  </div>
+</header>
+
+<!-- Main Workspace -->
+<div class="matrix-workspace">
+  <!-- DAG Stage -->
+  <section class="dag-stage">
+    <div class="dag-canvas-wrap">
+      <svg id="dag-svg" viewBox="0 0 880 340">
+        <!-- Definitions -->
+        <defs>
+          <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+            <path d="M 0 1 L 9 5 L 0 9 z" fill="#38bdf8" />
+          </marker>
+        </defs>
+
+        <!-- Edges -->
+        <!-- 1. Triage -> Scout -->
+        <path d="M 180 160 C 240 160, 240 80, 320 80" class="edge-line" marker-end="url(#arrow)" />
+        <circle cx="250" cy="115" r="4" class="edge-pulse">
+          <animate attributeName="cx" values="180;320" dur="2.4s" repeatCount="indefinite" />
+          <animate attributeName="cy" values="160;80" dur="2.4s" repeatCount="indefinite" />
+        </circle>
+
+        <!-- 2. Scout -> Execution -->
+        <path d="M 460 80 C 520 80, 520 160, 580 160" class="edge-line" marker-end="url(#arrow)" />
+        <circle cx="520" cy="120" r="4" class="edge-pulse">
+          <animate attributeName="cx" values="460;580" dur="2.8s" repeatCount="indefinite" />
+          <animate attributeName="cy" values="80;160" dur="2.8s" repeatCount="indefinite" />
+        </circle>
+
+        <!-- 3. Triage -> Execution (direct fast path) -->
+        <path d="M 180 170 L 580 170" class="edge-line" stroke="#1e2d4a" stroke-dasharray="4 4" marker-end="url(#arrow)" />
+
+        <!-- 4. Execution -> Supervisor -->
+        <path d="M 650 210 C 650 260, 480 260, 460 260" class="edge-line" marker-end="url(#arrow)" />
+        <circle cx="550" cy="260" r="4" class="edge-pulse" fill="#fbbf24">
+          <animate attributeName="cx" values="650;460" dur="2.2s" repeatCount="indefinite" />
+          <animate attributeName="cy" values="210;260" dur="2.2s" repeatCount="indefinite" />
+        </circle>
+
+        <!-- 5. Supervisor -> Job Ledger / Gateway (ACK) -->
+        <path d="M 320 260 C 260 260, 220 200, 180 180" class="edge-line" marker-end="url(#arrow)" />
+
+        <!-- Node 1: Triage Agent -->
+        <g class="dag-node-box" id="node-triage" transform="translate(40, 110)">
+          <rect class="node-bg" width="140" height="90" rx="8" fill="#0d1424" stroke="#a78bfa" stroke-width="1.5" />
+          <text x="14" y="26" fill="#a78bfa" font-family="ui-monospace" font-size="11" font-weight="700">01 // TRIAGE</text>
+          <text x="14" y="44" fill="#fff" font-family="ui-monospace" font-size="12" font-weight="600">actions.ask_jev</text>
+          <text x="14" y="62" fill="#94a3b8" font-family="sans-serif" font-size="10">Classify &amp; Policy Gate</text>
+          <rect x="14" y="70" width="112" height="4" rx="2" fill="#1e2d4a" />
+          <rect x="14" y="70" width="108" height="4" rx="2" fill="#a78bfa" />
+          <text x="14" y="82" fill="#10b981" font-family="ui-monospace" font-size="9">EFF: 0.98 · ONLINE</text>
+        </g>
+
+        <!-- Node 2: Scout Agent -->
+        <g class="dag-node-box" id="node-scout" transform="translate(320, 35)">
+          <rect class="node-bg" width="140" height="90" rx="8" fill="#0d1424" stroke="#38bdf8" stroke-width="1.5" />
+          <text x="14" y="26" fill="#38bdf8" font-family="ui-monospace" font-size="11" font-weight="700">02 // SCOUT</text>
+          <text x="14" y="44" fill="#fff" font-family="ui-monospace" font-size="12" font-weight="600">jev_file_read</text>
+          <text x="14" y="62" fill="#94a3b8" font-family="sans-serif" font-size="10">Deep Vault &amp; Invariants</text>
+          <rect x="14" y="70" width="112" height="4" rx="2" fill="#1e2d4a" />
+          <rect x="14" y="70" width="106" height="4" rx="2" fill="#38bdf8" />
+          <text x="14" y="82" fill="#10b981" font-family="ui-monospace" font-size="9">EFF: 0.96 · NOMINAL</text>
+        </g>
+
+        <!-- Node 3: Execution Agent -->
+        <g class="dag-node-box" id="node-exec" transform="translate(580, 110)">
+          <rect class="node-bg" width="140" height="90" rx="8" fill="#0d1424" stroke="#10b981" stroke-width="1.5" />
+          <text x="14" y="26" fill="#10b981" font-family="ui-monospace" font-size="11" font-weight="700">03 // EXECUTION</text>
+          <text x="14" y="44" fill="#fff" font-family="ui-monospace" font-size="12" font-weight="600">bash_tool / jail</text>
+          <text x="14" y="62" fill="#94a3b8" font-family="sans-serif" font-size="10">Sandboxed Subprocess</text>
+          <rect x="14" y="70" width="112" height="4" rx="2" fill="#1e2d4a" />
+          <rect x="14" y="70" width="102" height="4" rx="2" fill="#10b981" />
+          <text x="14" y="82" fill="#10b981" font-family="ui-monospace" font-size="9">EFF: 0.95 · GUARDED</text>
+        </g>
+
+        <!-- Node 4: Supervisor Agent -->
+        <g class="dag-node-box" id="node-supervisor" transform="translate(320, 215)">
+          <rect class="node-bg" width="140" height="90" rx="8" fill="#0d1424" stroke="#fbbf24" stroke-width="1.5" />
+          <text x="14" y="26" fill="#fbbf24" font-family="ui-monospace" font-size="11" font-weight="700">04 // SUPERVISOR</text>
+          <text x="14" y="44" fill="#fff" font-family="ui-monospace" font-size="12" font-weight="600">confidence_gate</text>
+          <text x="14" y="62" fill="#94a3b8" font-family="sans-serif" font-size="10">Composite Gating</text>
+          <rect x="14" y="70" width="112" height="4" rx="2" fill="#1e2d4a" />
+          <rect x="14" y="70" width="104" height="4" rx="2" fill="#fbbf24" />
+          <text x="14" y="82" fill="#10b981" font-family="ui-monospace" font-size="9">EFF: 0.97 · AUTO-EXEC</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Node Inspector Sidebar -->
+    <aside class="node-inspector">
+      <div class="node-title-bar">
+        <div>
+          <span style="font-size:10px; color:var(--muted); font-family:var(--mono);">ROLE INSPECTION</span>
+          <div class="node-name" id="insp-name">Execution Agent (exec)</div>
+        </div>
+        <span class="badge-status st-active" id="insp-status">ONLINE</span>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-lbl">Role Efficacy</div>
+          <div class="stat-val" style="color:var(--green);" id="insp-eff">0.952</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-lbl">Lock Status</div>
+          <div class="stat-val" style="color:var(--cyan);" id="insp-lock">FREE (0s)</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-lbl">Actions Completed</div>
+          <div class="stat-val" id="insp-runs">142</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-lbl">Quarantine Faults</div>
+          <div class="stat-val" style="color:var(--green);" id="insp-quar">0</div>
+        </div>
+      </div>
+
+      <div style="font-size:11px; color:var(--muted); font-family:var(--mono); line-height:1.4;" id="insp-desc">
+        Responsible for running verified bash commands, code helper actions, and script modifications under strict Level 6 guardrails.
+      </div>
+
+      <div class="action-deck">
+        <button class="btn-node-act" id="btn-pause-role"><span>⏸ Pause Role Queue</span><span>JobLedger</span></button>
+        <button class="btn-node-act" id="btn-swap-model"><span>⚡ Model Fallback Tier</span><span>Hermes</span></button>
+        <button class="btn-node-act danger" id="btn-evict-lock"><span>⚠️ Force Evict Stalled Lock</span><span>Sweeper</span></button>
+      </div>
+    </aside>
+  </section>
+
+  <!-- Lower Section: Active Pipelines Table -->
+  <section class="ledger-stage">
+    <div class="ledger-toolbar">
+      <span>PIPELINE EXECUTION MATRIX // JOB LEDGER PERSISTENCE</span>
+      <span style="color:var(--cyan);">ALL 4 ROLES COHERENT · ZERO QUARANTINE BREACHES</span>
+    </div>
+    <div class="ledger-table-wrap">
+      <table class="matrix-table">
+        <thead>
+          <tr>
+            <th>Job ID</th>
+            <th>Trigger</th>
+            <th>Matrix Path</th>
+            <th>Latency</th>
+            <th>Hermes Model</th>
+            <th>Confidence</th>
+            <th>Outcome</th>
+          </tr>
+        </thead>
+        <tbody id="pipeline-tbody">
+          <tr>
+            <td style="color:var(--cyan);">job-gtm-8041</td>
+            <td>GTM Outreach Batch</td>
+            <td>Triage ➔ Scout ➔ Supervisor</td>
+            <td>142ms</td>
+            <td>Qwen-2.5-Coder</td>
+            <td>0.924 (AUTO_EXECUTE)</td>
+            <td><span style="color:var(--green); font-weight:700;">DONE</span></td>
+          </tr>
+          <tr>
+            <td style="color:var(--cyan);">job-csv-8042</td>
+            <td>Adversarial CSV Invariant</td>
+            <td>Triage ➔ Scout (L8 Bool)</td>
+            <td>88ms</td>
+            <td>Qwen-2.5-Coder</td>
+            <td>0.980 (CLEAN)</td>
+            <td><span style="color:var(--green); font-weight:700;">DONE</span></td>
+          </tr>
+          <tr>
+            <td style="color:var(--cyan);">job-bash-8043</td>
+            <td>Echo Verification</td>
+            <td>Triage ➔ Execution (Jail #1)</td>
+            <td>64ms</td>
+            <td>Qwen-2.5-Coder</td>
+            <td>1.000 (VERIFIED)</td>
+            <td><span style="color:var(--green); font-weight:700;">DONE</span></td>
+          </tr>
+          <tr>
+            <td style="color:var(--cyan);">job-vault-8044</td>
+            <td>Second Brain Graph Link</td>
+            <td>Triage ➔ Scout (L9 Vault)</td>
+            <td>182ms</td>
+            <td>Qwen-2.5-Coder</td>
+            <td>0.910 (AUTO_EXECUTE)</td>
+            <td><span style="color:var(--green); font-weight:700;">DONE</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+  (function () {
+    const rolesData = {
+      triage: {
+        name: 'Triage Agent (triage)',
+        eff: '0.980',
+        lock: 'FREE (0s)',
+        runs: '186',
+        quar: '0',
+        desc: 'Evaluates incoming events, matches against capability_policy.json, and routes to downstream specialized agents.'
+      },
+      scout: {
+        name: 'Scout & Auditor (scout)',
+        eff: '0.962',
+        lock: 'FREE (0s)',
+        runs: '210',
+        quar: '0',
+        desc: 'Performs tokenless boolean audits and targeted vault scouting (actions.jev_file_read, jev_multi_file) to prevent context bloat.'
+      },
+      exec: {
+        name: 'Execution Agent (exec)',
+        eff: '0.952',
+        lock: 'FREE (0s)',
+        runs: '142',
+        quar: '0',
+        desc: 'Runs sandboxed code and terminal actions under strict Level 6 guardrails. Enforces command whitelist and defanging.'
+      },
+      supervisor: {
+        name: 'Supervisor & Gatekeeper (supervisor)',
+        eff: '0.974',
+        lock: 'FREE (0s)',
+        runs: '98',
+        quar: '0',
+        desc: 'Computes composite scores, evaluates confidence thresholds, and decides between AUTO_EXECUTE and MANUAL_REVIEW.'
+      }
+    };
+
+    function selectRole(roleKey) {
+      const data = rolesData[roleKey];
+      if (!data) return;
+      document.getElementById('insp-name').textContent = data.name;
+      document.getElementById('insp-eff').textContent = data.eff;
+      document.getElementById('insp-lock').textContent = data.lock;
+      document.getElementById('insp-runs').textContent = data.runs;
+      document.getElementById('insp-quar').textContent = data.quar;
+      document.getElementById('insp-desc').textContent = data.desc;
+    }
+
+    document.querySelectorAll('.dag-node-box').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.id.replace('node-', '');
+        selectRole(id);
+      });
+    });
+
+    document.getElementById('btn-pause-role').addEventListener('click', () => {
+      alert('Role queue paused in JobLedger. In-flight tasks will complete, but no new tasks will be assigned to this role.');
+    });
+
+    document.getElementById('btn-swap-model').addEventListener('click', () => {
+      alert('Model fallback triggered in HermesAdapter. Role switched to secondary low-latency weights.');
+    });
+
+    document.getElementById('btn-evict-lock').addEventListener('click', () => {
+      alert('Lock sweeper invoked. Any stalled locks on this role have been cleanly evicted and logged.');
+    });
+  })();
+</script>
+
+</body>
+</html>

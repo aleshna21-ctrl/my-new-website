@@ -5,7 +5,7 @@ agent_id: "agent-cron"
 role: "task_scheduler"
 parent: "[[00_AIOS_ROOT]]"
 status: "ACTIVE"
-updated_at: "2026-10-27T09:53:57.487287+00:00"
+updated_at: "2026-10-28T00:42:28.504181+00:00"
 accepted_triggers:
   - aios-directed
 tags:
@@ -31,6 +31,7 @@ tags:
 | `cron-hermes-probe` | `*/5 * * * *` | **ENABLED** | Probe 127.0.0.1:8080 model endpoint to verify local Ollama inference pipeline and latency. |
 | `cron-gtm-sync` | `*/5 * * * *` | **ENABLED** | Scans staged outreach drafts queue and updates notification diode state. |
 | `cron-board-health` | `*/5 * * * *` | **ENABLED** | Evaluates vital tasks overdue dates and updates board schedule buffers. |
+| `cron-001-invariants` | `*/5 * * * *` | **ENABLED** |  |
 
 ## Capabilities
 - `scheduled_pulse_generator`: Emits non-drifting scheduling signals.

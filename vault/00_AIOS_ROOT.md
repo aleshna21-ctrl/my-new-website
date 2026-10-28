@@ -4,11 +4,11 @@ type: "aios-root-node"
 node_id: "aios-root"
 ring: 0
 status: "ONLINE"
-updated_at: "2026-10-27T09:53:57.487287+00:00"
+updated_at: "2026-10-28T00:42:28.504181+00:00"
 active_agents_count: 5
-ledger_jobs_total: 58
+ledger_jobs_total: 76
 ledger_jobs_completed: 24
-kanban_board_revision: 88
+kanban_board_revision: 92
 tags:
   - aios
   - root-node
@@ -21,7 +21,7 @@ tags:
 
 > **AIOS Root Architecture**: Primary architectural nucleus providing centralized governance, deterministic agent coordination, and direct bidirectional links across all execution agents, ledger state, and knowledge storage.
 
-**Epoch Synchronization:** `2026-10-27T09:53:57.487287+00:00` · **Architecture:** `Ring-0 AIOS` · **Ledger Status:** `24/58 Jobs Verified`
+**Epoch Synchronization:** `2026-10-28T00:42:28.504181+00:00` · **Architecture:** `Ring-0 AIOS` · **Ledger Status:** `24/76 Jobs Verified`
 
 ---
 
@@ -67,13 +67,16 @@ graph TD
 ## 3. Live SQLite `job_ledger.db` Metrics
 
 - **Database Path:** `C:\Users\alesh\jev-workspace\delivery-offline\job_ledger.db`
-- **Total Ledger Jobs:** `58`
+- **Total Ledger Jobs:** `76`
 - **Completed:** `24` · **Running:** `0` · **Validated:** `0` · **Approved:** `0` · **Quarantined:** `0`
 - **Active Job Types:**
   - `agent_task`: 4 job(s)
-  - `architecture_routing_task`: 16 job(s)
-  - `chaos_fatal_task`: 12 job(s)
+  - `architecture_routing_task`: 28 job(s)
+  - `chaos_fatal_task`: 15 job(s)
+  - `discrepancy_audit`: 1 job(s)
+  - `execute_model_triage`: 1 job(s)
   - `hermes_inference`: 1 job(s)
+  - `reconcile_ap_ar`: 1 job(s)
   - `reconciliation`: 21 job(s)
   - `reconciliation_triage`: 2 job(s)
   - `risk_extraction`: 1 job(s)
@@ -82,11 +85,11 @@ graph TD
 ### Recent Ledger Audit Entries
 | Job ID | Type | State | Scope | Timestamp |
 | :--- | :--- | :--- | :--- | :--- |
-| `routing-test-1793094827` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-27T09:53:51 |
-| `chaos-fatal-1793094773` | `chaos_fatal_task` | `[ NEEDS_REVIEW ]` | `aios-systems-architect` | 2026-10-27T09:53:00 |
-| `routing-test-1793070532` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-27T03:08:56 |
-| `chaos-fatal-1793070480` | `chaos_fatal_task` | `[ NEEDS_REVIEW ]` | `aios-systems-architect` | 2026-10-27T03:08:06 |
-| `routing-test-1793068887` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-27T02:41:31 |
+| `routing-test-1793148138` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-28T00:42:22 |
+| `routing-test-1793147962` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-28T00:39:25 |
+| `routing-test-1793147575` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-28T00:32:59 |
+| `routing-test-1793115127` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-27T15:32:11 |
+| `routing-test-1793114825` | `architecture_routing_task` | `[ DONE ]` | `aios-systems-architect` | 2026-10-27T15:27:08 |
 
 ---
 *Maintained autonomously by AIOS Obsidian Root Generator.*

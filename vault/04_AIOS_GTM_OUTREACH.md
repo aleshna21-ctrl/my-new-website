@@ -5,7 +5,7 @@ node_id: "aios-gtm-outreach"
 ring: 1
 parent: "[[00_AIOS_ROOT]]"
 status: "ACTIVE"
-updated_at: "2026-10-27T09:53:57.491952+00:00"
+updated_at: "2026-10-28T00:42:28.511498+00:00"
 total_prospects: 9
 approved_prospects: 2
 pending_prospects: 7

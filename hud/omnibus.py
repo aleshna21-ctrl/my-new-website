@@ -19,13 +19,25 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-WORKSPACE_ROOT = Path(r"C:\Users\alesh\jev-workspace")
-HUD_ROOT = WORKSPACE_ROOT / "hud-interface"
-OFFLINE_DIR = WORKSPACE_ROOT / "delivery-offline"
-GTM_DIR = WORKSPACE_ROOT / "gtm-research"
-OUTBOX_DIR = WORKSPACE_ROOT / "notification-outbox"
-SECOND_BRAIN_ROOT = Path(r"G:\My Drive\second-brain")
-MARK_LVI_ROOT = Path(r"C:\Users\alesh\Downloads\Mark-LVI-main")
+_CURRENT_DIR = Path(__file__).resolve().parent  # hud
+HUD_ROOT = Path(os.environ.get("HUD_DIR", str(_CURRENT_DIR.parent)))
+WORKSPACE_ROOT = Path(os.environ.get("JEV_PROJECT_ROOT", str(HUD_ROOT.parent)))
+OFFLINE_DIR = Path(os.environ.get("JEV_OFFLINE_DIR", str(WORKSPACE_ROOT / "delivery-offline" if (WORKSPACE_ROOT / "delivery-offline").exists() else HUD_ROOT / "inbox")))
+GTM_DIR = Path(os.environ.get("GTM_RESEARCH_DIR", str(WORKSPACE_ROOT / "gtm-research" if (WORKSPACE_ROOT / "gtm-research").exists() else HUD_ROOT / "outbox" / "gtm")))
+OUTBOX_DIR = Path(os.environ.get("NOTIFICATION_OUTBOX_DIR", str(WORKSPACE_ROOT / "notification-outbox" if (WORKSPACE_ROOT / "notification-outbox").exists() else HUD_ROOT / "outbox")))
+_DEFAULT_SECOND_BRAIN = (
+    Path(r"G:\My Drive\second-brain")
+    if Path(r"G:\My Drive\second-brain").exists()
+    else HUD_ROOT / "vault"
+)
+SECOND_BRAIN_ROOT = Path(os.environ.get("SECOND_BRAIN_DIR", str(_DEFAULT_SECOND_BRAIN)))
+
+_DEFAULT_MARK_LVI = (
+    Path(r"C:\Users\alesh\Downloads\Mark-LVI-main")
+    if Path(r"C:\Users\alesh\Downloads\Mark-LVI-main").exists()
+    else HUD_ROOT / "mark-lvi"
+)
+MARK_LVI_ROOT = Path(os.environ.get("MARK_LVI_DIR", str(_DEFAULT_MARK_LVI)))
 
 UNTRUSTED_START = "<<<UNTRUSTED_DATA_START>>>"
 UNTRUSTED_END = "<<<UNTRUSTED_DATA_END>>>"
@@ -176,7 +188,7 @@ def get_second_brain_graph() -> dict[str, Any]:
             "ring": 0,
             "group": "core",
             "status": "active",
-            "path": "c:/Users/alesh/jev-workspace/hud-interface/vault/00_AIOS_ROOT.md",
+            "path": (HUD_ROOT / "vault" / "00_AIOS_ROOT.md").as_posix(),
             "tags": ["core", "aios", "root-node", "ring-0"],
             "summary": "Ring 0 Operating System Nucleus: Primary coordinator and direct wiring hub for all 5 execution agent clusters.",
             "requires": ["core.md"],
@@ -199,7 +211,7 @@ def get_second_brain_graph() -> dict[str, Any]:
             "ring": 1,
             "group": "aios",
             "status": "active",
-            "path": "c:/Users/alesh/jev-workspace/hud-interface/vault/03_AIOS_ASSIGNMENTS.md",
+            "path": (HUD_ROOT / "vault" / "03_AIOS_ASSIGNMENTS.md").as_posix(),
             "tags": ["assignments", "orchestrator", "routing", "ledger"],
             "summary": "Dynamic assignment routing linking Kanban orchestrator, SQLite ledger, and educate. Accepts aios-directed, operator-directed, and event-driven triggers.",
             "requires": ["aios-root", "core.md", "execution", "knowledge-memory"],
@@ -465,7 +477,7 @@ def get_second_brain_graph() -> dict[str, Any]:
             "ring": 3,
             "group": "inbox",
             "status": "active",
-            "path": "c:/Users/alesh/jev-workspace/hud-interface/inbox/offline_snapshot.json",
+            "path": (HUD_ROOT / "inbox" / "offline_snapshot.json").as_posix(),
             "tags": ["inbox", "diode", "snapshot"],
             "summary": "Read-only exported snapshot from delivery-offline SQLite job_ledger.db and reconciliation harness.",
             "requires": ["verification", "project-index"],
@@ -476,7 +488,7 @@ def get_second_brain_graph() -> dict[str, Any]:
             "ring": 3,
             "group": "outbox",
             "status": "active",
-            "path": "c:/Users/alesh/jev-workspace/notification-outbox/metadata_outbox.json",
+            "path": (OUTBOX_DIR / "metadata_outbox.json").as_posix(),
             "tags": ["outbox", "diode", "smtp-relay"],
             "summary": "Regex-scrubbed, zero-PII event outbox awaiting isolated SMTP TLS relay dispatch.",
             "requires": ["execution", "verification"],
@@ -487,7 +499,7 @@ def get_second_brain_graph() -> dict[str, Any]:
             "ring": 3,
             "group": "outbox",
             "status": "active",
-            "path": "c:/Users/alesh/jev-workspace/gtm-research/staged_outreach.json",
+            "path": (GTM_DIR / "staged_outreach.json").as_posix(),
             "tags": ["outbox", "gtm", "human-review"],
             "summary": "Staged B2B reconciliation outreach drafts gated by content-hash revision lock and explicit operator approval.",
             "requires": ["execution", "hermes-delegation"],
@@ -498,7 +510,7 @@ def get_second_brain_graph() -> dict[str, Any]:
             "ring": 3,
             "group": "assistant",
             "status": "active",
-            "path": "c:/Users/alesh/Downloads/Mark-LVI-main/main.py",
+            "path": (MARK_LVI_ROOT / "main.py").as_posix(),
             "tags": ["mark-lvi", "providers", "outcome-guard"],
             "summary": "Cross-platform voice & tool assistant with STT Whisper + Local LLM + Piper TTS, 5-word verified outcomes, and recallable memory.",
             "requires": ["local-models", "knowledge-memory", "persona"],
@@ -509,7 +521,7 @@ def get_second_brain_graph() -> dict[str, Any]:
             "ring": 3,
             "group": "security",
             "status": "active",
-            "path": "c:/Users/alesh/jev-workspace/capability_policy.json",
+            "path": (WORKSPACE_ROOT / "capability_policy.json").as_posix(),
             "tags": ["security", "air-gap", "zones"],
             "summary": "Enforces loopback-only socket guards and least-privilege capability manifests across all 5 workspace agent groups.",
             "requires": ["execution", "source-governance"],

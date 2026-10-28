@@ -80,7 +80,10 @@ def register_static_routes(router: TypeSafeRouter):
     for proto in (
         "/prototype-1-ring-command.html",
         "/prototype-2-minimal-3d.html",
-        "/prototype-3-cockpit-split.html"
+        "/prototype-3-cockpit-split.html",
+        "/prototype-4-hermes-stream.html",
+        "/prototype-5-hermes-matrix.html",
+        "/prototype-6-hermes-cockpit.html"
     ):
         p_path = proto
         router.register(p_path, "GET", lambda p=p_path, **kw: _serve_file(p.lstrip("/")), service="static-prototype")
